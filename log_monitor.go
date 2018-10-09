@@ -5,10 +5,9 @@ import (
     "os/signal"
     "syscall"
     "log"
-    //"github.com/potix/log_monitor/configurator"
+    "github.com/potix/log_monitor/configurator"
+    "github.com/potix/log_monitor/rule_manager"
     "github.com/potix/log_monitor/event_manager"
-    //"github.com/potix/log_monitor/rule_manager"
-    //"github.com/potix/log_monitor/file_monitor"
 )
 
 func signalWait() {
@@ -33,14 +32,20 @@ func signalWait() {
 }
 
 func main() {
-    eventManager, err := event_manager.NewEventManager()
+    flag.Var(&configFile, "config", "config file")
+    flag.Parse()
+
+    configurator, err := configurator.NewConfigurator(configFile)
+    if (err != nil) {
+	log.Fatal("can not create configurator: (%v)", err)
+    }
+
+    eventManager, err := event_manager.NewEventManager(configurator)
     if err != nil {
-      log.Fatal(err)
+      log.Fatal("can not create event manager", err)
     }
     eventManager.Start()
 
-
-    eventManager.AddPath(".")
     signalWait()
 
     eventManager.Stop()

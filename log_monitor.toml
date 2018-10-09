@@ -1,0 +1,4 @@
+workdir = /var/tmp
+rules = rule.toml
+auto_reload = 1
+targets = [ "/var/log" ]

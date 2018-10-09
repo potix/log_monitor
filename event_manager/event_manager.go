@@ -182,30 +182,46 @@ func (e *eventManager) RemovePath(path string) (error) {
 }
 
 func (e *eventManager) Start() {
+     e.ruleManager.Start()
      e.loopEnd = make(chan bool)
      go e.eventLoop()
 }
 
 func (e *eventManager) Stop() {
      close(e.loopEnd)
+     e.ruleManager.Stop()
 }
 
 func (e *eventManager) Clean() {
      e.watcher.Close()
+     e.ruleManager.Clean()
 }
 
-func NewEventManager() (*eventManager, error) {
-        watcher, err :=  fsnotify.NewWatcher()
-        if err != nil {
-		return nil, errors.Wrap(err, "can not create event manager");
-	}
-	return &eventManager {
-                loopEnd: make(chan bool),
-		watcher : watcher,
-		paths : make(map[string]bool),
-                pathsMutex : new(sync.Mutex),  
-		files : make(map[string]*fileStatus),
-		filesMutex : new(sync.Mutex),
-	}, nil
+func NewEventManager(configurator *configurator.Configurator) (*eventManager, error) {
+     ruleManager, err := ruleManager.NewRuleManager(configurator)
+     if (err != nil) {
+         return nil, errors.Wrapf("can not create rule manager")
+     }
+
+     fileChecker, err := fileChecker.NewFileChecker()
+     if (err != nil) {
+         return nil, errors.Wrapf(err, "can not create file checker")
+     }
+
+     watcher, err :=  fsnotify.NewWatcher()
+     if err != nil {
+         return nil, errors.Wrapf(err, "can not create event manager")
+     }
+
+     return &eventManager {
+          fileChecker: fileChecker,
+          ruleManager: ruleManager,
+          loopEnd: make(chan bool),
+	  watcher : watcher,
+	  paths : make(map[string]bool),
+          pathsMutex : new(sync.Mutex),  
+	  files : make(map[string]*fileStatus),
+	  filesMutex : new(sync.Mutex),
+     }, nil
 }
 
