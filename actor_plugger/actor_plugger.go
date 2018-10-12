@@ -11,31 +11,45 @@ import (
 )
 
 type ActorPlugin interface {
-    Initialize (error)
+    Initialize() (error)
     AddFile(fileId string, fileName string)
-    RemoveFile(fileId string, filename string)
-    RenameFile(fileId string, filename string)
-    ModifyFile(fileId string, filename string)
+    RemoveFile(fileId string, fileName string)
+    RenameFile(fileId string, oldFileName string, newFileName string)
+    ModifyFile(fileId string, fileName string)
+    ExpireFile(fileId string, fileName string)
     Finalize()
 }
+
+const (
+   GetActorPluginInfo string = "GetActorPluginInfo"
+)
 
 type ActorPluginNewFunc func(configFile string) (ActorPlugin, error)
 
 type GetActorPluginInfoFunc func() (string, ActorPluginNewFunc)
 
-var registeredActorPlugins = make(map[string]ActorPluginNewFunc)
+type actorPluginInfo struct {
+     actorPluginFilePath string
+     actorPluginNewFunc ActorPluginNewFunc
+}
 
-func registerActorPlugin(getActorPluginInfoFunc GetActorPluginInfoFunc) {
+var registeredActorPlugins = make(map[string]*actorPluginInfo)
+
+func registerActorPlugin(pluginFilePath string,  getActorPluginInfoFunc GetActorPluginInfoFunc) {
     name, actorPluginNewFunc := getActorPluginInfoFunc()	
-    registeredActorPlugins[name] = actorPluginNewFunc
+    registeredActorPlugins[name] = &actorPluginInfo {
+        actorPluginFilePath: pluginFilePath,
+        actorPluginNewFunc: actorPluginNewFunc,
+    }
 }
 
 func getActorPluginSymbole(openedPlugin *plugin.Plugin) (GetActorPluginInfoFunc, error) {
-    s, err := openedPlugin.Lookup("GetPluginInfo")
+    s, err := openedPlugin.Lookup(GetActorPluginInfo)
     if err != nil {
         return nil, errors.Wrap(err, "not found GetPluginInfoFunc symbole")
     }
-    return s.(GetActorPluginInfoFunc), nil
+    //return s.(GetActorPluginInfoFunc), nil
+    return s.(func() (string, ActorPluginNewFunc)), nil
 }
 
 func loadActorPlugin(pluginFilePath string) (error) {
@@ -47,7 +61,7 @@ func loadActorPlugin(pluginFilePath string) (error) {
     if err != nil {
 	return errors.Wrapf(err, "not plugin file (file = %v)", pluginFilePath)
     }
-    registerActorPlugin(f)
+    registerActorPlugin(pluginFilePath, f)
     return nil
 }
 
@@ -71,6 +85,11 @@ func loadActorPluginFiles(pluginPath string) (error) {
     }
     for _, file := range fileList {
         if file.IsDir() {
+            newPluginPath := filepath.Join(pluginPath, file.Name())
+            err := loadActorPluginFiles(newPluginPath)
+            if err != nil {
+                log.Printf("can not load plugin files (%v): %v", newPluginPath, err)
+            }
             continue
         }
 	ext := filepath.Ext(file.Name())
@@ -80,7 +99,7 @@ func loadActorPluginFiles(pluginPath string) (error) {
 	pluginFilePath := filepath.Join(pluginPath, file.Name())
 	err := loadActorPlugin(pluginFilePath)
 	if err != nil {
-	    log.Printf("can not load plugin (file = %v)", pluginFilePath)
+	    log.Printf("can not load plugin file (%v): %v", pluginFilePath, err)
 	    continue
 	}
     }
@@ -91,8 +110,8 @@ func LoadActorPlugins(pluginPath string) (error) {
 	return loadActorPluginFiles(pluginPath)
 }
 
-func GetActorPlugin(name string) (ActorPluginNewFunc, bool) {
-        actorPluginNewFunc, ok := registeredActorPlugins[name]
-        return actorPluginNewFunc, ok
+func GetActorPlugin(name string) (string, ActorPluginNewFunc, bool) {
+        info, ok := registeredActorPlugins[name]
+        return info.actorPluginFilePath, info.actorPluginNewFunc, ok
 }
 
