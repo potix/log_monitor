@@ -7,24 +7,29 @@ import (
     "log"
     "sync"
     "sync/atomic"
+    "path/filepath"
     "github.com/pkg/errors"
     "github.com/fsnotify/fsnotify"
     "github.com/potix/log_monitor/configurator"
-//    "github.com/potix/log_monitor/rule_manager"
 )
+
+type pathInfo struct {
+    expire int64
+    actorName string
+    actorConfig string
+}
 
 type fileStatus struct {
     name string
     dirty uint64
     pos uint64
+    lastUpdate int64
 }
 
 type EventManager struct{
-//    fileChecker *file_checker.FileChecker
-//    ruleManager *rule_manager.RuleManager
     loopEnd  chan bool
     watcher *fsnotify.Watcher
-    paths map[string]bool
+    paths map[string]*pathInfo
     pathsMutex *sync.Mutex
     files map[string]*fileStatus
     filesMutex *sync.Mutex
@@ -122,7 +127,13 @@ func (e *EventManager) eventLoop() {
             log.Println("fileId:", fileId)
             if event.Op&fsnotify.Create == fsnotify.Create {
                if info.IsDir() {
-                   e.AddPath(event.Name)
+                   parent := filepath.Dir(event.Name)
+                   info, ok := e.paths[parent]
+                   if !ok {
+                       log.Printf("not found parent %v", parent) 
+                   } else {
+                       e.AddPath(event.Name, info.expire, info.actorName, info.actorConfig)
+                   }
                } else {
                    e.addFile(fileId, event)
                }
@@ -152,7 +163,7 @@ func (e *EventManager) eventLoop() {
     }
 }
 
-func (e *EventManager) AddPath(path string) (error) {
+func (e *EventManager) AddPath(path string, expire int64, actorName string, actorConfig string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -164,7 +175,11 @@ func (e *EventManager) AddPath(path string) (error) {
         if err != nil {
             errors.Wrap(err, "can not add path to watcher")
 	} else {
-            e.paths[path] = true
+            e.paths[path] = &pathInfo{
+                expire: expire,
+                actorName: actorName,
+                actorConfig: actorConfig,
+            }
         }
         return nil
 }
@@ -186,10 +201,6 @@ func (e *EventManager) RemovePath(path string) (error) {
 }
 
 func (e *EventManager) Start() (error) {
-//     err := e.ruleManager.Start()
-//     if err != nil {
-//         return errors.Wrap(err, "can not start ruleManager")
-//     }
      e.loopEnd = make(chan bool)
      go e.eventLoop()
      return nil
@@ -197,39 +208,60 @@ func (e *EventManager) Start() (error) {
 
 func (e *EventManager) Stop() {
      close(e.loopEnd)
-//     e.ruleManager.Stop()
 }
 
 func (e *EventManager) Clean() {
      e.watcher.Close()
-//     e.ruleManager.Clean()
+}
+
+func fixupPath(targetPath string) (string) {
+    u, err := user.Current()
+    if err != nil {
+        return targetPath
+    }
+    re := regexp.MustCompile("^~/")
+    return re.ReplaceAllString(targetPath, u.HomeDir+"/")
+}
+
+func addTargets(targetPath string, expire int64, actorName string, actorConfig string) {
+    targetPath = fixupPath(targetPath)
+    fileList, err := ioutil.ReadDir(targetPath)
+    if err != nil {
+        log.Printf("can not read dir (%v): %v", targetPath, err)
+        return 
+    }
+    // AddPath
+    for _, file := range fileList {
+        newPath := filepath.Join(pluginPath, file.Name())
+        if file.IsDir() {
+            // AddPath
+            addTarget(newPath, expire int64, actorName string, actorConfig string)
+	    continue
+        }
+        // AddFile
+    }
+
 }
 
 func NewEventManager(configurator *configurator.Configurator) (*EventManager, error) {
-//     ruleManager, err := rule_manager.NewRuleManager(configurator)
-//     if (err != nil) {
-//         return nil, errors.Wrapf("can not create rule manager")
-//     }
-
-//    fileChecker, err := fileChecker.NewFileChecker()
-//     if (err != nil) {
-//         return nil, errors.Wrapf(err, "can not create file checker")
-//     }
-
-     watcher, err :=  fsnotify.NewWatcher()
-     if err != nil {
-         return nil, errors.Wrapf(err, "can not create event manager")
-     }
-
-     return &EventManager {
-//          fileChecker: fileChecker,
-//          ruleManager: ruleManager,
-          loopEnd: make(chan bool),
-	  watcher : watcher,
-	  paths : make(map[string]bool),
-          pathsMutex : new(sync.Mutex),  
-	  files : make(map[string]*fileStatus),
-	  filesMutex : new(sync.Mutex),
-     }, nil
+    config, err := configurator.Load()
+    if err != nil {
+        return nil, errors.Wrap(err, "can not load config")
+    }
+    for targetName, targetInfo := range config.Targets {
+         addTarget(targetInfo.path, targetInfo.expire, targetInfo.actorName, targetInfo,actorConfig)
+    }
+    watcher, err :=  fsnotify.NewWatcher()
+    if err != nil {
+        return nil, errors.Wrapf(err, "can not create event manager")
+    }
+    return &EventManager {
+        loopEnd: make(chan bool),
+        watcher : watcher,
+        paths : make(map[string]*pathInfo),
+        pathsMutex : new(sync.Mutex),  
+        files : make(map[string]*fileStatus),
+        filesMutex : new(sync.Mutex),
+    }, nil
 }
 

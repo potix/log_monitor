@@ -84,11 +84,11 @@ func loadActorPluginFiles(pluginPath string) (error) {
         return errors.Wrapf(err, "can not read directory (path = %v)", pluginPath)
     }
     for _, file := range fileList {
+        newPath := filepath.Join(pluginPath, file.Name())
         if file.IsDir() {
-            newPluginPath := filepath.Join(pluginPath, file.Name())
-            err := loadActorPluginFiles(newPluginPath)
+            err := loadActorPluginFiles(newPath)
             if err != nil {
-                log.Printf("can not load plugin files (%v): %v", newPluginPath, err)
+                log.Printf("can not load plugin files (%v): %v", newPath, err)
             }
             continue
         }
@@ -96,10 +96,9 @@ func loadActorPluginFiles(pluginPath string) (error) {
 	if ext != ".so" && ext != ".dylib" {
 	    continue
 	}
-	pluginFilePath := filepath.Join(pluginPath, file.Name())
-	err := loadActorPlugin(pluginFilePath)
+	err := loadActorPlugin(newPath)
 	if err != nil {
-	    log.Printf("can not load plugin file (%v): %v", pluginFilePath, err)
+	    log.Printf("can not load plugin file (%v): %v", newPath, err)
 	    continue
 	}
     }

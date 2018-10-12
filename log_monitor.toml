@@ -1,8 +1,10 @@
 work_dir = "."
 actor_plugin_path = "actor_plugins"
 actor_name = "matcher"
-actor_config = "actor_plugins/matcher/matcher.toml"
+actor_config = "matcher.toml"
 [targets]
   [targets.var_log]
   path = "/var/log"
   expire = 172800
+  actor_name = "matcher"
+  actor_config = "matcher.toml"
