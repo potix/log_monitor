@@ -7,6 +7,9 @@ import (
     "log"
     "sync"
     "sync/atomic"
+    "os/user"
+    "regexp"
+    "io/ioutil"
     "path/filepath"
     "github.com/pkg/errors"
     "github.com/fsnotify/fsnotify"
@@ -232,10 +235,10 @@ func addTargets(targetPath string, expire int64, actorName string, actorConfig s
     }
     // AddPath
     for _, file := range fileList {
-        newPath := filepath.Join(pluginPath, file.Name())
+        newPath := filepath.Join(targetPath, file.Name())
         if file.IsDir() {
             // AddPath
-            addTarget(newPath, expire int64, actorName string, actorConfig string)
+            addTargets(newPath, expire, actorName, actorConfig)
 	    continue
         }
         // AddFile
@@ -248,8 +251,8 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
     if err != nil {
         return nil, errors.Wrap(err, "can not load config")
     }
-    for targetName, targetInfo := range config.Targets {
-         addTarget(targetInfo.path, targetInfo.expire, targetInfo.actorName, targetInfo,actorConfig)
+    for _, targetInfo := range config.Targets {
+         addTargets(targetInfo.Path, targetInfo.Expire, targetInfo.ActorName, targetInfo.ActorConfig)
     }
     watcher, err :=  fsnotify.NewWatcher()
     if err != nil {
