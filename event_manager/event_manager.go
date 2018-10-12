@@ -9,6 +9,8 @@ import (
     "sync/atomic"
     "github.com/pkg/errors"
     "github.com/fsnotify/fsnotify"
+    "github.com/potix/log_monitor/configurator"
+//    "github.com/potix/log_monitor/rule_manager"
 )
 
 type fileStatus struct {
@@ -17,7 +19,9 @@ type fileStatus struct {
     pos uint64
 }
 
-type eventManager struct{
+type EventManager struct{
+//    fileChecker *file_checker.FileChecker
+//    ruleManager *rule_manager.RuleManager
     loopEnd  chan bool
     watcher *fsnotify.Watcher
     paths map[string]bool
@@ -26,7 +30,7 @@ type eventManager struct{
     filesMutex *sync.Mutex
 }
 
-func (e *eventManager) addFile(fileId string, event fsnotify.Event) {
+func (e *EventManager) addFile(fileId string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     oldStatus, ok := e.files[fileId]
@@ -46,7 +50,7 @@ func (e *eventManager) addFile(fileId string, event fsnotify.Event) {
     }
 }
 
-func (e *eventManager) removeFile(fileId string, event fsnotify.Event) {
+func (e *EventManager) removeFile(fileId string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     _, ok := e.files[fileId]
@@ -57,7 +61,7 @@ func (e *eventManager) removeFile(fileId string, event fsnotify.Event) {
     delete(e.files, fileId)
 }
 
-func (e *eventManager) setDirtyFile(fileId string, event fsnotify.Event) {
+func (e *EventManager) setDirtyFile(fileId string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     status, ok := e.files[fileId]
@@ -68,7 +72,7 @@ func (e *eventManager) setDirtyFile(fileId string, event fsnotify.Event) {
     atomic.StoreUint64(&status.dirty, 1)
 }
 
-func (e *eventManager) checkFileContent(fileId string) {
+func (e *EventManager) checkFileContent(fileId string) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     status, ok := e.files[fileId]
@@ -89,7 +93,7 @@ func (e *eventManager) checkFileContent(fileId string) {
     atomic.StoreUint64(&status.dirty, 0)
 }
 
-func (e *eventManager) eventLoop() {
+func (e *EventManager) eventLoop() {
     for {
         select {
         case <- e.loopEnd:
@@ -148,7 +152,7 @@ func (e *eventManager) eventLoop() {
     }
 }
 
-func (e *eventManager) AddPath(path string) (error) {
+func (e *EventManager) AddPath(path string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -164,7 +168,7 @@ func (e *eventManager) AddPath(path string) (error) {
         }
         return nil
 }
-func (e *eventManager) RemovePath(path string) (error) {
+func (e *EventManager) RemovePath(path string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -181,41 +185,45 @@ func (e *eventManager) RemovePath(path string) (error) {
         return nil
 }
 
-func (e *eventManager) Start() {
-     e.ruleManager.Start()
+func (e *EventManager) Start() (error) {
+//     err := e.ruleManager.Start()
+//     if err != nil {
+//         return errors.Wrap(err, "can not start ruleManager")
+//     }
      e.loopEnd = make(chan bool)
      go e.eventLoop()
+     return nil
 }
 
-func (e *eventManager) Stop() {
+func (e *EventManager) Stop() {
      close(e.loopEnd)
-     e.ruleManager.Stop()
+//     e.ruleManager.Stop()
 }
 
-func (e *eventManager) Clean() {
+func (e *EventManager) Clean() {
      e.watcher.Close()
-     e.ruleManager.Clean()
+//     e.ruleManager.Clean()
 }
 
-func NewEventManager(configurator *configurator.Configurator) (*eventManager, error) {
-     ruleManager, err := ruleManager.NewRuleManager(configurator)
-     if (err != nil) {
-         return nil, errors.Wrapf("can not create rule manager")
-     }
+func NewEventManager(configurator *configurator.Configurator) (*EventManager, error) {
+//     ruleManager, err := rule_manager.NewRuleManager(configurator)
+//     if (err != nil) {
+//         return nil, errors.Wrapf("can not create rule manager")
+//     }
 
-     fileChecker, err := fileChecker.NewFileChecker()
-     if (err != nil) {
-         return nil, errors.Wrapf(err, "can not create file checker")
-     }
+//    fileChecker, err := fileChecker.NewFileChecker()
+//     if (err != nil) {
+//         return nil, errors.Wrapf(err, "can not create file checker")
+//     }
 
      watcher, err :=  fsnotify.NewWatcher()
      if err != nil {
          return nil, errors.Wrapf(err, "can not create event manager")
      }
 
-     return &eventManager {
-          fileChecker: fileChecker,
-          ruleManager: ruleManager,
+     return &EventManager {
+//          fileChecker: fileChecker,
+//          ruleManager: ruleManager,
           loopEnd: make(chan bool),
 	  watcher : watcher,
 	  paths : make(map[string]bool),

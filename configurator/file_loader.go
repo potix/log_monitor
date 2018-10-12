@@ -55,9 +55,9 @@ func (f *fileLoader) load(config interface{}) (error) {
 func newFileLoader(configFile string) (loader, error) {
 	_, err := os.Stat(configFile)
 	if err != nil {
-		return nil, errors.Wrapf(err, "not exists config file (%v)", parsedFile)
+		return nil, errors.Wrapf(err, "not exists config file (%v)", configFile)
 	}
 	return &fileLoader{
-            configFile: configFile
+            configFile: configFile,
         }, nil
 }

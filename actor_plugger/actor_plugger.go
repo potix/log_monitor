@@ -11,7 +11,7 @@ import (
 )
 
 type ActorPlugin interface {
-    Initialize (err)
+    Initialize (error)
     AddFile(fileId string, fileName string)
     RemoveFile(fileId string, filename string)
     RenameFile(fileId string, filename string)
@@ -19,19 +19,15 @@ type ActorPlugin interface {
     Finalize()
 }
 
-type ActorPluginNewFunc func(configFile string)
+type ActorPluginNewFunc func(configFile string) (ActorPlugin, error)
 
-type GetActorPluginInfoFunc func() (string, ActorNewFunc)
+type GetActorPluginInfoFunc func() (string, ActorPluginNewFunc)
 
 var registeredActorPlugins = make(map[string]ActorPluginNewFunc)
 
-func registerActorPlugin(name string, actorPluginNewFunc ActorPluginNewFunc) {
-        registeredActorPlugins[name] = actorPluginNewFunc
-}
-
-func registerActorPlugin(getActorPluginInfoFunc GetActorInfoFunc) {
-    name, actorNewFunc := getActorPluginInfoFunc()	
-    registerActorPlugin(name, actorNewFunc)
+func registerActorPlugin(getActorPluginInfoFunc GetActorPluginInfoFunc) {
+    name, actorPluginNewFunc := getActorPluginInfoFunc()	
+    registeredActorPlugins[name] = actorPluginNewFunc
 }
 
 func getActorPluginSymbole(openedPlugin *plugin.Plugin) (GetActorPluginInfoFunc, error) {
@@ -51,7 +47,8 @@ func loadActorPlugin(pluginFilePath string) (error) {
     if err != nil {
 	return errors.Wrapf(err, "not plugin file (file = %v)", pluginFilePath)
     }
-    a.registerActorPlugin(f)
+    registerActorPlugin(f)
+    return nil
 }
 
 func fixupActorPluginPath(pluginPath string) (string) {
@@ -67,7 +64,7 @@ func loadActorPluginFiles(pluginPath string) (error) {
     if pluginPath == "" {
         return errors.New("invalid plugin path")
     }
-    pluginPath := fixupPluginPath(pluginPath)
+    pluginPath = fixupActorPluginPath(pluginPath)
     fileList, err := ioutil.ReadDir(pluginPath)
     if err != nil {
         return errors.Wrapf(err, "can not read directory (path = %v)", pluginPath)
@@ -81,7 +78,7 @@ func loadActorPluginFiles(pluginPath string) (error) {
 	    continue
 	}
 	pluginFilePath := filepath.Join(pluginPath, file.Name())
-	err := loadActorPlugin(pluginType, pluginFilePath)
+	err := loadActorPlugin(pluginFilePath)
 	if err != nil {
 	    log.Printf("can not load plugin (file = %v)", pluginFilePath)
 	    continue
@@ -91,7 +88,7 @@ func loadActorPluginFiles(pluginPath string) (error) {
 }
 
 func LoadActorPlugins(pluginPath string) (error) {
-	return p.loadActorPluginFiles(pluginPath)
+	return loadActorPluginFiles(pluginPath)
 }
 
 func GetActorPlugin(name string) (ActorPluginNewFunc, bool) {
