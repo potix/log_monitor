@@ -351,3 +351,5 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
     return eventManager, nil
 }
 
+// XXX TODO ファイル情報はファイルIDじゃなくてファイル名をキーにしてかんりしないとだめっぽ
+// XXX TODO renameの時は一時的にファイル情報を退避して、CREATEで同じファイルIDがあれば復元する感じ
