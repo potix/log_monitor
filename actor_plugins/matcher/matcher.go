@@ -22,29 +22,34 @@ func (m *Matcher) Initialize() (error) {
     return nil
 }
 
-// CreateFile is add file
-func (m *Matcher) CreateFile(fileID string, fileName string) {
-    fmt.Println("CreateFile", fileID, fileName)
+// FoundFile is add file
+func (m *Matcher) FoundFile(fileID string, fileName string) {
+    fmt.Println("FoundFile", fileID, fileName)
 }
 
-// RemoveFile is remove file
-func (m *Matcher) RemoveFile(fileID string, fileName string) {
-    fmt.Println("RemoveFile", fileID, fileName)
+// CreatedFile is add file
+func (m *Matcher) CreatedFile(fileID string, fileName string) {
+    fmt.Println("CreatedFile", fileID, fileName)
 }
 
-// RenameFile is rename file
-func (m *Matcher) RenameFile(fileID string, oldFileName string, newFileName string) {
-    fmt.Println("RenameFile", fileID, oldFileName, newFileName)
+// RemovedFile is remove file
+func (m *Matcher) RemovedFile(fileID string, fileName string) {
+    fmt.Println("RemovedFile", fileID, fileName)
 }
 
-// ModifyFile is modify file
-func (m *Matcher) ModifyFile(fileID string, fileName string) {
-    fmt.Println("modifyFile", fileID, fileName)
+// RenamedFile is rename file
+func (m *Matcher) RenamedFile(fileID string, oldFileName string, newFileName string) {
+    fmt.Println("RenamedFile", fileID, oldFileName, newFileName)
 }
 
-// ExpireFile is expire file
-func (m *Matcher) ExpireFile(fileID string, fileName string) {
-    fmt.Println("expireFile", fileID, fileName)
+// ModifiedFile is modify file
+func (m *Matcher) ModifiedFile(fileID string, fileName string) {
+    fmt.Println("modifiedFile", fileID, fileName)
+}
+
+// ExpiredFile is expire file
+func (m *Matcher) ExpiredFile(fileID string, fileName string) {
+    fmt.Println("expiredFile", fileID, fileName)
 }
 
 // Finalize is finalize

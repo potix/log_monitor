@@ -6,14 +6,15 @@ import (
     "fmt"
     "log"
     "sync"
-    "sync/atomic"
     "os/user"
+    "time"
     "regexp"
     "io/ioutil"
     "path/filepath"
     "github.com/pkg/errors"
     "github.com/fsnotify/fsnotify"
     "github.com/potix/log_monitor/configurator"
+    "github.com/potix/log_monitor/actorplugger"
 )
 
 type pathInfo struct {
@@ -24,9 +25,10 @@ type pathInfo struct {
 
 type fileStatus struct {
     name string
-    dirty uint64
-    pos uint64
+    dirty bool
     lastUpdate int64
+    actorPlugin actorplugger.ActorPlugin
+    mutex *sync.Mutex
 }
 
 // EventManager is event manager
@@ -39,14 +41,57 @@ type EventManager struct{
     filesMutex *sync.Mutex
 }
 
-func (e *EventManager) addFile(fileID string, event fsnotify.Event) {
+func (e *EventManager) newActorPlugin(path string) (actorplugger.ActorPlugin, error) {
+    parentDir := filepath.Dir(path)
+    parentPathInfo, ok := e.getPathInfo(parentDir)
+    if !ok {
+        return nil, errors.Errorf("not found parent path info (%v, %v)", path, parentDir)
+    }
+    actorPluginFilePath, actorPluginNewFunc, ok := actorplugger.GetActorPlugin(parentPathInfo.actorName)
+    actorPluginDir := filepath.Dir(actorPluginFilePath)
+    actorPluginConfigPath := filepath.Join(actorPluginDir, parentPathInfo.actorConfig)
+    return  actorPluginNewFunc(actorPluginConfigPath)
+}
+
+func (e *EventManager) foundFile(fileID string, name string) {
+    actorPlugin, err := e.newActorPlugin(name)
+    if err != nil {
+	log.Printf("can not create actor plugin (%v, %v): %v", fileID, name, err)
+        return
+    }
+    e.filesMutex.Lock()
+    defer e.filesMutex.Unlock()
+    _, ok := e.files[fileID]
+    if ok {
+        log.Printf("already exists file (%v, %v)", fileID, name)
+        return
+    }
+    e.files[fileID] = &fileStatus {
+        name: name,
+        dirty: true,
+	actorPlugin: actorPlugin,
+	lastUpdate: time.Now().Unix(),
+	mutex : new(sync.Mutex),
+    }
+    actorPlugin.FoundFile(fileID, name)
+}
+
+func (e *EventManager) createdFile(fileID string, event fsnotify.Event) {
+    actorPlugin, err := e.newActorPlugin(event.Name)
+    if err != nil {
+	log.Printf("can not create actor plugin (%v, %v): %v", fileID, event.Name, err)
+        return
+    }
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     oldStatus, ok := e.files[fileID]
     if ok {
         if oldStatus.name != event.Name {
             log.Printf("change name (%v, %v -> %v)", fileID, oldStatus.name, event.Name)
+	    oldStatus.mutex.Lock()
+	    defer oldStatus.mutex.Unlock()
             oldStatus.name = event.Name
+	    oldStatus.lastUpdate = time.Now().Unix()
         } else {
             log.Printf("already exists file (%v, %v)", fileID, event.Name)
         }
@@ -54,12 +99,14 @@ func (e *EventManager) addFile(fileID string, event fsnotify.Event) {
     }
     e.files[fileID] = &fileStatus {
         name: event.Name,
-        dirty: 1,
-        pos: 0,
+        dirty: true,
+	actorPlugin: actorPlugin,
+	lastUpdate: time.Now().Unix(),
+	mutex : new(sync.Mutex),
     }
 }
 
-func (e *EventManager) removeFile(fileID string, event fsnotify.Event) {
+func (e *EventManager) removedFile(fileID string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     _, ok := e.files[fileID]
@@ -78,10 +125,13 @@ func (e *EventManager) setDirtyFile(fileID string, event fsnotify.Event) {
         log.Printf("not exists file (%v, %v)", fileID, event.Name)
         return
     }
-    atomic.StoreUint64(&status.dirty, 1)
+    status.mutex.Lock()
+    defer status.mutex.Unlock()
+    status.dirty = true
+    status.lastUpdate = time.Now().Unix()
 }
 
-func (e *EventManager) checkFileContent(fileID string) {
+func (e *EventManager) modifiedFile(fileID string) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     status, ok := e.files[fileID]
@@ -89,17 +139,19 @@ func (e *EventManager) checkFileContent(fileID string) {
         log.Printf("not exists file (%v)", fileID)
         return
     }
-    dirty := atomic.LoadUint64(&status.dirty)
-    if dirty == 0 {
+    status.mutex.Lock()
+    defer status.mutex.Unlock()
+    if !status.dirty {
         log.Printf("not dirty  (%v, %v)", fileID, status.name)
         return
     }
 
 
-    // XXX TODO check
+    // XXX TODO modify
 
 
-    atomic.StoreUint64(&status.dirty, 0)
+
+    status.dirty = false
 }
 
 func (e *EventManager) eventLoop() {
@@ -107,7 +159,7 @@ func (e *EventManager) eventLoop() {
         select {
         case <- e.loopEnd:
             return
-        case event, ok := <- e.watcher.Events:
+        case event, ok := <-e.watcher.Events:
             if !ok {
                  // end loop
                  return
@@ -117,18 +169,11 @@ func (e *EventManager) eventLoop() {
                 // nop
                 break
             }
-            info, err := os.Stat(event.Name)
+            fileID, info, err := e.getFileInfo(event.Name)
             if err != nil {
-                log.Printf("can not get file info (%v)", event.Name)
+                log.Printf("can not get file id (%v)", event.Name)
                 break
             }
-            stat, ok := info.Sys().(*syscall.Stat_t)
-            if !ok {
-                log.Printf("can not get file stat (%v)", event.Name)
-                break
-            }
-            fileID := fmt.Sprintf("%v:%v", stat.Dev, stat.Ino)
-            log.Println("fileID:", fileID)
             if event.Op&fsnotify.Create == fsnotify.Create {
                if info.IsDir() {
                    parent := filepath.Dir(event.Name)
@@ -136,17 +181,17 @@ func (e *EventManager) eventLoop() {
                    if !ok {
                        log.Printf("not found parent %v", parent) 
                    } else {
-                       e.AddPath(event.Name, info.expire, info.actorName, info.actorConfig)
+                       e.addPath(event.Name, info.expire, info.actorName, info.actorConfig)
                    }
                } else {
-                   e.addFile(fileID, event)
+                   e.createdFile(fileID, event)
                }
             }
             if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
                if info.IsDir() {
-                   e.RemovePath(event.Name)
+                   e.deletePath(event.Name)
                } else {
-                   e.removeFile(fileID, event)
+                   e.removedFile(fileID, event)
                }
             }
             if event.Op&fsnotify.Write == fsnotify.Write {
@@ -155,20 +200,19 @@ func (e *EventManager) eventLoop() {
                }
             }
             if !info.IsDir() {
-                e.checkFileContent(fileID)
+                e.modifiedFile(fileID)
             }
-        case err, ok := <- e.watcher.Errors:
+        case err, ok := <-e.watcher.Errors:
             if !ok {
                  // end loop
                  return
             }
-            log.Println("error: ", err)       
+            log.Println("error: ", err)
         }
     }
 }
 
-// AddPath is add path
-func (e *EventManager) AddPath(path string, expire int64, actorName string, actorConfig string) (error) {
+func (e *EventManager) addPath(path string, expire int64, actorName string, actorConfig string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -189,8 +233,7 @@ func (e *EventManager) AddPath(path string, expire int64, actorName string, acto
         return nil
 }
 
-// RemovePath is remove path
-func (e *EventManager) RemovePath(path string) (error) {
+func (e *EventManager) deletePath(path string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -200,11 +243,18 @@ func (e *EventManager) RemovePath(path string) (error) {
         }
         err := e.watcher.Remove(path)
         if err != nil {
-            errors.Wrap(err, "can not remove path from watcher")
+            errors.Wrap(err, "can not delete path from watcher")
 	} else {
             delete(e.paths, path)
         }
         return nil
+}
+
+func (e *EventManager) getPathInfo(path string) (*pathInfo, bool) {
+	e.pathsMutex.Lock()
+        defer e.pathsMutex.Unlock()
+	pathInfo, ok := e.paths[path]
+	return pathInfo, ok
 }
 
 // Start is start
@@ -224,7 +274,21 @@ func (e *EventManager) Clean() {
      e.watcher.Close()
 }
 
-func fixupPath(targetPath string) (string) {
+func  (e *EventManager) getFileInfo(filePath string) (string, os.FileInfo, error){
+        info, err := os.Stat(filePath)
+        if err != nil {
+            return "", nil, errors.Wrapf(err, "can not get file info (%v)", filePath)
+        }
+        stat, ok := info.Sys().(*syscall.Stat_t)
+        if !ok {
+            return "", nil, errors.Wrapf(err, "can not get file stat (%v)", filePath)
+        }
+        fileID := fmt.Sprintf("%v:%v", stat.Dev, stat.Ino)
+        log.Println("fileID:", fileID)
+	return fileID, info, nil
+}
+
+func (e *EventManager) fixupPath(targetPath string) (string) {
     u, err := user.Current()
     if err != nil {
         return targetPath
@@ -233,24 +297,31 @@ func fixupPath(targetPath string) (string) {
     return re.ReplaceAllString(targetPath, u.HomeDir+"/")
 }
 
-func addTargets(targetPath string, expire int64, actorName string, actorConfig string) {
-    targetPath = fixupPath(targetPath)
+func (e *EventManager) addTargets(targetPath string, expire int64, actorName string, actorConfig string) {
+    targetPath = e.fixupPath(targetPath)
     fileList, err := ioutil.ReadDir(targetPath)
     if err != nil {
         log.Printf("can not read dir (%v): %v", targetPath, err)
         return
     }
-    // AddPath
+    err = e.addPath(targetPath, expire, actorName, actorConfig)
+    if err != nil {
+        log.Printf("can not add path (%v): %v", targetPath, err)
+        return
+    }
     for _, file := range fileList {
         newPath := filepath.Join(targetPath, file.Name())
         if file.IsDir() {
-            // AddPath
-            addTargets(newPath, expire, actorName, actorConfig)
+            e.addTargets(newPath, expire, actorName, actorConfig)
 	    continue
         }
-        // AddFile
+	fileID, _, err := e.getFileInfo(newPath)
+        if err != nil {
+            log.Printf("can not get file id (%v)", newPath)
+            continue
+        }
+	e.foundFile(fileID, newPath)
     }
-
 }
 
 // NewEventManager is create new event manager
@@ -259,20 +330,21 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
     if err != nil {
         return nil, errors.Wrap(err, "can not load config")
     }
-    for _, targetInfo := range config.Targets {
-         addTargets(targetInfo.Path, targetInfo.Expire, targetInfo.ActorName, targetInfo.ActorConfig)
-    }
     watcher, err :=  fsnotify.NewWatcher()
     if err != nil {
         return nil, errors.Wrapf(err, "can not create event manager")
     }
-    return &EventManager {
+    eventManager := &EventManager {
         loopEnd: make(chan bool),
         watcher : watcher,
         paths : make(map[string]*pathInfo),
-        pathsMutex : new(sync.Mutex),  
+        pathsMutex : new(sync.Mutex),
         files : make(map[string]*fileStatus),
         filesMutex : new(sync.Mutex),
-    }, nil
+    }
+    for _, targetInfo := range config.Targets {
+         eventManager.addTargets(targetInfo.Path, targetInfo.Expire, targetInfo.ActorName, targetInfo.ActorConfig)
+    }
+    return eventManager, nil
 }
 
