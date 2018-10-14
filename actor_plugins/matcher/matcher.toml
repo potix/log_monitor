@@ -2,14 +2,14 @@ auto_reload = 1
 
 [notifier]
 
-[notifier.my_mail]
-plugin=mail
-config=mail.toml
+  [notifier.my_mail]
+  plugin="mail"
+  config="mail.toml"
 
 [matcher]
 
-[matcher.error_message]
-file_pattern='^.+message.+$'
-msg_pattern='^.+ error.+$'
-notify=my_mail
-mode=normal
+  [matcher.error_message]
+  file_pattern="^.+message.+$"
+  msg_pattern="^.+ error.+$"
+  notifire="my_mail"
+  mode="normal"

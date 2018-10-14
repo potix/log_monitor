@@ -59,6 +59,8 @@ func (m *Matcher) Finalize() {
 
 // NewMatcher is create new matcher
 func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
+    fmt.Println("configFile = ", configFile)
+
     configurator, err := configurator.NewConfigurator(configFile)
     if err != nil {
         return nil, errors.Wrapf(err, "can not create configurator (%v)", configFile)
@@ -69,7 +71,7 @@ func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
     }
 
-    fmt.Println(config)
+    fmt.Println("config = ", config)
 
     ruleManager, err := rulemanager.NewRuleManager(configurator)
     if (err != nil) {

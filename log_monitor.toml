@@ -4,7 +4,7 @@ actor_name = "matcher"
 actor_config = "matcher.toml"
 [targets]
   [targets.var_log]
-  path = "/var/log"
+  path = "."
   expire = 172800
   actor_name = "matcher"
   actor_config = "matcher.toml"

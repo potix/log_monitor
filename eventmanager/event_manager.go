@@ -91,7 +91,10 @@ func (e *EventManager) createdFile(fileID string, event fsnotify.Event) {
 	    oldStatus.mutex.Lock()
 	    defer oldStatus.mutex.Unlock()
             oldStatus.name = event.Name
+	    oldStatus.actorPlugin = actorPlugin
+	    oldStatus.dirty = true
 	    oldStatus.lastUpdate = time.Now().Unix()
+	    // XXX TODO call plugin
         } else {
             log.Printf("already exists file (%v, %v)", fileID, event.Name)
         }
@@ -104,16 +107,20 @@ func (e *EventManager) createdFile(fileID string, event fsnotify.Event) {
 	lastUpdate: time.Now().Unix(),
 	mutex : new(sync.Mutex),
     }
+    actorPlugin.CreatedFile(fileID, event.Name)
 }
 
 func (e *EventManager) removedFile(fileID string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
-    _, ok := e.files[fileID]
+    status, ok := e.files[fileID]
     if !ok {
         log.Printf("not exists file (%v, %v)", fileID, event.Name)
         return
     }
+    status.mutex.Lock()
+    defer status.mutex.Unlock()
+    status.actorPlugin.RemovedFile(fileID, event.Name)
     delete(e.files, fileID)
 }
 
@@ -145,33 +152,29 @@ func (e *EventManager) modifiedFile(fileID string) {
         log.Printf("not dirty  (%v, %v)", fileID, status.name)
         return
     }
-
-
-    // XXX TODO modify
-
-
-
+    log.Printf("modified file (%v, %v)", fileID, status.name)
+    status.actorPlugin.ModifiedFile(fileID, status.name)
     status.dirty = false
 }
 
 func (e *EventManager) eventLoop() {
     for {
         select {
-        case <- e.loopEnd:
+		case <- e.loopEnd:
             return
         case event, ok := <-e.watcher.Events:
             if !ok {
                  // end loop
                  return
             }
-            log.Printf("%v", event)
-            if event.Op&fsnotify.Chmod == fsnotify.Chmod {
+            log.Printf("event = %v", event)
+            if event.Op&fsnotify.Chmod == fsnotify.Chmod || event.Op&fsnotify.Rename == fsnotify.Rename {
                 // nop
                 break
             }
             fileID, info, err := e.getFileInfo(event.Name)
             if err != nil {
-                log.Printf("can not get file id (%v)", event.Name)
+                log.Printf("can not get file info (%v)", event.Name)
                 break
             }
             if event.Op&fsnotify.Create == fsnotify.Create {
@@ -187,7 +190,7 @@ func (e *EventManager) eventLoop() {
                    e.createdFile(fileID, event)
                }
             }
-            if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+            if event.Op&fsnotify.Remove == fsnotify.Remove {
                if info.IsDir() {
                    e.deletePath(event.Name)
                } else {
@@ -317,7 +320,7 @@ func (e *EventManager) addTargets(targetPath string, expire int64, actorName str
         }
 	fileID, _, err := e.getFileInfo(newPath)
         if err != nil {
-            log.Printf("can not get file id (%v)", newPath)
+            log.Printf("can not get file info (%v)", newPath)
             continue
         }
 	e.foundFile(fileID, newPath)
