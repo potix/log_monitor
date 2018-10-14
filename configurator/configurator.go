@@ -9,10 +9,12 @@ type loader interface {
 	load(config interface{}) (error)
 }
 
+// Configurator is configrator
 type Configurator struct {
 	loader     loader
 }
 
+// Load is load
 func (c *Configurator) Load() (*Config, error) {
         config := new(Config)
 	err := c.loader.load(config)
@@ -32,6 +34,7 @@ func validateConfigFile(configFile string) (error) {
         return nil
 }
 
+// NewConfigurator is create new configurator
 func NewConfigurator(configFile string) (*Configurator, error) {
 	err := validateConfigFile(configFile)
 	if (err != nil) {

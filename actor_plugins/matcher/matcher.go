@@ -3,48 +3,57 @@ package main
 import (
     "fmt"
     "github.com/pkg/errors"
-    "github.com/potix/log_monitor/actor_plugger"
+    "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
-    "github.com/potix/log_monitor/actor_plugins/matcher/file_checker"
-    "github.com/potix/log_monitor/actor_plugins/matcher/rule_manager"
+    "github.com/potix/log_monitor/actor_plugins/matcher/filechecker"
+    "github.com/potix/log_monitor/actor_plugins/matcher/rulemanager"
 )
 
+// Matcher is matcher
 type Matcher struct {
     configurator *configurator.Configurator
-    fileChecker *file_checker.FileChecker
-    ruleManager *rule_manager.RuleManager
+    fileChecker *filechecker.FileChecker
+    ruleManager *rulemanager.RuleManager
 }
 
+// Initialize is initialize
 func (m *Matcher) Initialize() (error) {
     fmt.Println("initialize")
     return nil
 }
 
-func (m *Matcher) AddFile(fileId string, fileName string) {
-    fmt.Println("AddFile", fileId, fileName)
+// CreateFile is add file
+func (m *Matcher) CreateFile(fileID string, fileName string) {
+    fmt.Println("CreateFile", fileID, fileName)
 }
 
-func (m *Matcher) RemoveFile(fileId string, fileName string) {
-    fmt.Println("RemoveFile", fileId, fileName)
+// RemoveFile is remove file
+func (m *Matcher) RemoveFile(fileID string, fileName string) {
+    fmt.Println("RemoveFile", fileID, fileName)
 }
 
-func (m *Matcher) RenameFile(fileId string, oldFileName string, newFileName string) {
-    fmt.Println("RenameFile", fileId, oldFileName, newFileName)
+// RenameFile is rename file
+func (m *Matcher) RenameFile(fileID string, oldFileName string, newFileName string) {
+    fmt.Println("RenameFile", fileID, oldFileName, newFileName)
 }
 
-func (m *Matcher) ModifyFile(fileId string, fileName string) {
-    fmt.Println("modifyFile", fileId, fileName)
+// ModifyFile is modify file
+func (m *Matcher) ModifyFile(fileID string, fileName string) {
+    fmt.Println("modifyFile", fileID, fileName)
 }
 
-func (m *Matcher) ExpireFile(fileId string, fileName string) {
-    fmt.Println("expireFile", fileId, fileName)
+// ExpireFile is expire file
+func (m *Matcher) ExpireFile(fileID string, fileName string) {
+    fmt.Println("expireFile", fileID, fileName)
 }
 
+// Finalize is finalize
 func (m *Matcher) Finalize() {
     fmt.Println("finalize")
 }
 
-func NewMatcher(configFile string) (actor_plugger.ActorPlugin, error) {
+// NewMatcher is create new matcher
+func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
     configurator, err := configurator.NewConfigurator(configFile)
     if err != nil {
         return nil, errors.Wrapf(err, "can not create configurator (%v)", configFile)
@@ -57,12 +66,12 @@ func NewMatcher(configFile string) (actor_plugger.ActorPlugin, error) {
 
     fmt.Println(config)
 
-    ruleManager, err := rule_manager.NewRuleManager(configurator)
+    ruleManager, err := rulemanager.NewRuleManager(configurator)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create rule manager")
     }
 
-    fileChecker, err := file_checker.NewFileChecker(ruleManager)
+    fileChecker, err := filechecker.NewFileChecker(ruleManager)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create file checker")
     }
@@ -74,6 +83,7 @@ func NewMatcher(configFile string) (actor_plugger.ActorPlugin, error) {
     }, nil
 }
 
-func GetActorPluginInfo() (string, actor_plugger.ActorPluginNewFunc) {
+// GetActorPluginInfo is GetActorPluginInfo
+func GetActorPluginInfo() (string, actorplugger.ActorPluginNewFunc) {
     return "matcher", NewMatcher
 }

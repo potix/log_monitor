@@ -7,9 +7,8 @@ import (
     "flag"
     "log"
     "github.com/potix/log_monitor/configurator"
-    "github.com/potix/log_monitor/actor_plugger"
-//    "github.com/potix/log_monitor/rule_manager"
-    "github.com/potix/log_monitor/event_manager"
+    "github.com/potix/log_monitor/actorplugger"
+    "github.com/potix/log_monitor/eventmanager"
 )
 
 func signalWait() {
@@ -53,12 +52,12 @@ func main() {
 	log.Fatalf("can not change dir (%v): %v", config.WorkDir, err)
     }
 
-    err = actor_plugger.LoadActorPlugins(config.ActorPluginPath)
+    err = actorplugger.LoadActorPlugins(config.ActorPluginPath)
     if err != nil {
 	log.Fatalf("can not load actor plugins (%v): ", config.ActorPluginPath, err)
     }
 
-    eventManager, err := event_manager.NewEventManager(configurator)
+    eventManager, err := eventmanager.NewEventManager(configurator)
     if err != nil {
       log.Fatalf("can not create event manager: %v ", err)
     }

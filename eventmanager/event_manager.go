@@ -1,4 +1,4 @@
-package event_manager
+package eventmanager
 
 import (
     "os"
@@ -29,6 +29,7 @@ type fileStatus struct {
     lastUpdate int64
 }
 
+// EventManager is event manager
 type EventManager struct{
     loopEnd  chan bool
     watcher *fsnotify.Watcher
@@ -38,59 +39,59 @@ type EventManager struct{
     filesMutex *sync.Mutex
 }
 
-func (e *EventManager) addFile(fileId string, event fsnotify.Event) {
+func (e *EventManager) addFile(fileID string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
-    oldStatus, ok := e.files[fileId]
+    oldStatus, ok := e.files[fileID]
     if ok {
         if oldStatus.name != event.Name {
-            log.Printf("change name (%v, %v -> %v)", fileId, oldStatus.name, event.Name)
+            log.Printf("change name (%v, %v -> %v)", fileID, oldStatus.name, event.Name)
             oldStatus.name = event.Name
         } else {
-            log.Printf("already exists file (%v, %v)", fileId, event.Name)
+            log.Printf("already exists file (%v, %v)", fileID, event.Name)
         }
         return
     }
-    e.files[fileId] = &fileStatus {
+    e.files[fileID] = &fileStatus {
         name: event.Name,
         dirty: 1,
         pos: 0,
     }
 }
 
-func (e *EventManager) removeFile(fileId string, event fsnotify.Event) {
+func (e *EventManager) removeFile(fileID string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
-    _, ok := e.files[fileId]
+    _, ok := e.files[fileID]
     if !ok {
-        log.Printf("not exists file (%v, %v)", fileId, event.Name)
+        log.Printf("not exists file (%v, %v)", fileID, event.Name)
         return
     }
-    delete(e.files, fileId)
+    delete(e.files, fileID)
 }
 
-func (e *EventManager) setDirtyFile(fileId string, event fsnotify.Event) {
+func (e *EventManager) setDirtyFile(fileID string, event fsnotify.Event) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
-    status, ok := e.files[fileId]
+    status, ok := e.files[fileID]
     if !ok {
-        log.Printf("not exists file (%v, %v)", fileId, event.Name)
+        log.Printf("not exists file (%v, %v)", fileID, event.Name)
         return
     }
     atomic.StoreUint64(&status.dirty, 1)
 }
 
-func (e *EventManager) checkFileContent(fileId string) {
+func (e *EventManager) checkFileContent(fileID string) {
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
-    status, ok := e.files[fileId]
+    status, ok := e.files[fileID]
     if !ok {
-        log.Printf("not exists file (%v)", fileId)
+        log.Printf("not exists file (%v)", fileID)
         return
     }
     dirty := atomic.LoadUint64(&status.dirty)
     if dirty == 0 {
-        log.Printf("not dirty  (%v, %v)", fileId, status.name)
+        log.Printf("not dirty  (%v, %v)", fileID, status.name)
         return
     }
 
@@ -126,8 +127,8 @@ func (e *EventManager) eventLoop() {
                 log.Printf("can not get file stat (%v)", event.Name)
                 break
             }
-            fileId := fmt.Sprintf("%v:%v", stat.Dev, stat.Ino)
-            log.Println("fileId:", fileId)
+            fileID := fmt.Sprintf("%v:%v", stat.Dev, stat.Ino)
+            log.Println("fileID:", fileID)
             if event.Op&fsnotify.Create == fsnotify.Create {
                if info.IsDir() {
                    parent := filepath.Dir(event.Name)
@@ -138,23 +139,23 @@ func (e *EventManager) eventLoop() {
                        e.AddPath(event.Name, info.expire, info.actorName, info.actorConfig)
                    }
                } else {
-                   e.addFile(fileId, event)
+                   e.addFile(fileID, event)
                }
             }
             if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
                if info.IsDir() {
                    e.RemovePath(event.Name)
                } else {
-                   e.removeFile(fileId, event)
+                   e.removeFile(fileID, event)
                }
             }
             if event.Op&fsnotify.Write == fsnotify.Write {
                if !info.IsDir() {
-                   e.setDirtyFile(fileId, event)
+                   e.setDirtyFile(fileID, event)
                }
             }
             if !info.IsDir() {
-                e.checkFileContent(fileId)
+                e.checkFileContent(fileID)
             }
         case err, ok := <- e.watcher.Errors:
             if !ok {
@@ -166,6 +167,7 @@ func (e *EventManager) eventLoop() {
     }
 }
 
+// AddPath is add path
 func (e *EventManager) AddPath(path string, expire int64, actorName string, actorConfig string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
@@ -186,6 +188,8 @@ func (e *EventManager) AddPath(path string, expire int64, actorName string, acto
         }
         return nil
 }
+
+// RemovePath is remove path
 func (e *EventManager) RemovePath(path string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
@@ -203,16 +207,19 @@ func (e *EventManager) RemovePath(path string) (error) {
         return nil
 }
 
+// Start is start
 func (e *EventManager) Start() (error) {
      e.loopEnd = make(chan bool)
      go e.eventLoop()
      return nil
 }
 
+// Stop is stop
 func (e *EventManager) Stop() {
      close(e.loopEnd)
 }
 
+// Clean is clean
 func (e *EventManager) Clean() {
      e.watcher.Close()
 }
@@ -231,7 +238,7 @@ func addTargets(targetPath string, expire int64, actorName string, actorConfig s
     fileList, err := ioutil.ReadDir(targetPath)
     if err != nil {
         log.Printf("can not read dir (%v): %v", targetPath, err)
-        return 
+        return
     }
     // AddPath
     for _, file := range fileList {
@@ -246,6 +253,7 @@ func addTargets(targetPath string, expire int64, actorName string, actorConfig s
 
 }
 
+// NewEventManager is create new event manager
 func NewEventManager(configurator *configurator.Configurator) (*EventManager, error) {
     config, err := configurator.Load()
     if err != nil {

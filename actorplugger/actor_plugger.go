@@ -1,4 +1,4 @@
-package actor_plugger
+package actorplugger
 
 import (
     "plugin"
@@ -10,22 +10,26 @@ import (
     "github.com/pkg/errors"
 )
 
+// ActorPlugin is actor plugin
 type ActorPlugin interface {
     Initialize() (error)
-    AddFile(fileId string, fileName string)
-    RemoveFile(fileId string, fileName string)
-    RenameFile(fileId string, oldFileName string, newFileName string)
-    ModifyFile(fileId string, fileName string)
-    ExpireFile(fileId string, fileName string)
+    CreateFile(fileID string, fileName string)
+    RemoveFile(fileID string, fileName string)
+    RenameFile(fileID string, oldFileName string, newFileName string)
+    ModifyFile(fileID string, fileName string)
+    ExpireFile(fileID string, fileName string)
     Finalize()
 }
 
 const (
+   // GetActorPluginInfo is GetActorPluginInfo symbple
    GetActorPluginInfo string = "GetActorPluginInfo"
 )
 
+// ActorPluginNewFunc is ActorPluginNewFunc
 type ActorPluginNewFunc func(configFile string) (ActorPlugin, error)
 
+// GetActorPluginInfoFunc is GetActorPluginInfoFunc
 type GetActorPluginInfoFunc func() (string, ActorPluginNewFunc)
 
 type actorPluginInfo struct {
@@ -105,10 +109,12 @@ func loadActorPluginFiles(pluginPath string) (error) {
     return nil
 }
 
+// LoadActorPlugins is load actor Plugins
 func LoadActorPlugins(pluginPath string) (error) {
 	return loadActorPluginFiles(pluginPath)
 }
 
+// GetActorPlugin is get actor plugin
 func GetActorPlugin(name string) (string, ActorPluginNewFunc, bool) {
         info, ok := registeredActorPlugins[name]
         return info.actorPluginFilePath, info.actorPluginNewFunc, ok
