@@ -363,7 +363,7 @@ func (e *EventManager) addTargets(targetPath string, actorName string, actorConf
     }
     for _, file := range fileList {
         newPath := filepath.Join(targetPath, file.Name())
-        if (targetPath == ".") {
+        if (targetPath == "." || targetPath == "./") {
             newPath = targetPath + "/" + newPath
         }
         if file.IsDir() {
