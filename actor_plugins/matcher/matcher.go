@@ -23,32 +23,32 @@ func (m *Matcher) Initialize() (error) {
 }
 
 // FoundFile is add file
-func (m *Matcher) FoundFile(fileID string, fileName string) {
+func (m *Matcher) FoundFile(fileName string, fileID string) {
     fmt.Println("FoundFile", fileID, fileName)
 }
 
 // CreatedFile is add file
-func (m *Matcher) CreatedFile(fileID string, fileName string) {
+func (m *Matcher) CreatedFile(fileName string, fileID string) {
     fmt.Println("CreatedFile", fileID, fileName)
 }
 
 // RemovedFile is remove file
-func (m *Matcher) RemovedFile(fileID string, fileName string) {
+func (m *Matcher) RemovedFile(fileName string, fileID string) {
     fmt.Println("RemovedFile", fileID, fileName)
 }
 
 // RenamedFile is rename file
-func (m *Matcher) RenamedFile(fileID string, oldFileName string, newFileName string) {
+func (m *Matcher) RenamedFile(oldFileName string, newFileName string, fileID string) {
     fmt.Println("RenamedFile", fileID, oldFileName, newFileName)
 }
 
 // ModifiedFile is modify file
-func (m *Matcher) ModifiedFile(fileID string, fileName string) {
+func (m *Matcher) ModifiedFile(fileName string, fileID string) {
     fmt.Println("modifiedFile", fileID, fileName)
 }
 
 // ExpiredFile is expire file
-func (m *Matcher) ExpiredFile(fileID string, fileName string) {
+func (m *Matcher) ExpiredFile(fileName string, fileID string) {
     fmt.Println("expiredFile", fileID, fileName)
 }
 
