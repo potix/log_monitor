@@ -7,7 +7,6 @@ import (
     "log"
     "sync"
     "os/user"
-    "time"
     "regexp"
     "io/ioutil"
     "path/filepath"
@@ -18,7 +17,6 @@ import (
 )
 
 type pathInfo struct {
-    expire int64
     actorName string
     actorConfig string
 }
@@ -26,7 +24,6 @@ type pathInfo struct {
 type fileStatus struct {
     fileID string
     dirty bool
-    lastUpdate int64
     actorPlugin actorplugger.ActorPlugin
     mutex *sync.Mutex
 }
@@ -77,7 +74,6 @@ func (e *EventManager) foundFile(name string, fileID string) {
         fileID: fileID,
         dirty: true,
 	actorPlugin: actorPlugin,
-	lastUpdate: time.Now().Unix(),
 	mutex : new(sync.Mutex),
     }
     actorPlugin.FoundFile(name, fileID)
@@ -91,10 +87,17 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) {
     }
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
-    _, ok := e.files[event.Name]
+    status, ok := e.files[event.Name]
     if ok {
-        log.Printf("[createdFile] already exists file (%v, %v)", fileID, event.Name)
-        return
+        if status.fileID == fileID {
+             log.Printf("[createdFile] already exists file (%v, %v)", fileID, event.Name)
+             return
+        }
+        // rename to exists file name
+        status.mutex.Lock()
+        defer status.mutex.Unlock()
+        status.actorPlugin.RemovedFile(event.Name, status.fileID)
+        delete(e.files, event.Name)
     }
 
     // renamed file
@@ -106,7 +109,6 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) {
           defer renameInfo.fileStatus.mutex.Unlock()
           renameInfo.fileStatus.actorPlugin = actorPlugin
           renameInfo.fileStatus.dirty = true
-          renameInfo.fileStatus.lastUpdate = time.Now().Unix()
           e.files[event.Name] = renameInfo.fileStatus
           actorPlugin.RenamedFile(renameInfo.name, event.Name, fileID)
           delete(e.renameFiles, fileID)
@@ -118,7 +120,6 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) {
         fileID: fileID,
         dirty: true,
 	actorPlugin: actorPlugin,
-	lastUpdate: time.Now().Unix(),
 	mutex : new(sync.Mutex),
     }
     actorPlugin.CreatedFile(event.Name, fileID)
@@ -170,7 +171,6 @@ func (e *EventManager) setDirtyFile(event fsnotify.Event, fileID string) {
     status.mutex.Lock()
     defer status.mutex.Unlock()
     status.dirty = true
-    status.lastUpdate = time.Now().Unix()
 }
 
 func (e *EventManager) modifiedFile(event fsnotify.Event) {
@@ -218,7 +218,7 @@ func (e *EventManager) eventLoop() {
                    if !ok {
                        log.Printf("[event Loop] not found parent %v", parent) 
                    } else {
-                       e.addPath(event.Name, info.expire, info.actorName, info.actorConfig)
+                       e.addPath(event.Name, info.actorName, info.actorConfig)
                    }
                } else {
                    e.createdFile(event, fileID)
@@ -264,7 +264,7 @@ func (e *EventManager) eventLoop() {
     }
 }
 
-func (e *EventManager) addPath(path string, expire int64, actorName string, actorConfig string) (error) {
+func (e *EventManager) addPath(path string, actorName string, actorConfig string) (error) {
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -277,7 +277,6 @@ func (e *EventManager) addPath(path string, expire int64, actorName string, acto
             return errors.Wrap(err, "can not add path to watcher")
 	} else {
             e.paths[path] = &pathInfo{
-                expire: expire,
                 actorName: actorName,
                 actorConfig: actorConfig,
             }
@@ -350,14 +349,14 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
     return re.ReplaceAllString(targetPath, u.HomeDir+"/")
 }
 
-func (e *EventManager) addTargets(targetPath string, expire int64, actorName string, actorConfig string) {
+func (e *EventManager) addTargets(targetPath string, actorName string, actorConfig string) {
     targetPath = e.fixupPath(targetPath)
     fileList, err := ioutil.ReadDir(targetPath)
     if err != nil {
         log.Printf("[addTargets] can not read dir (%v): %v", targetPath, err)
         return
     }
-    err = e.addPath(targetPath, expire, actorName, actorConfig)
+    err = e.addPath(targetPath, actorName, actorConfig)
     if err != nil {
         log.Printf("[addTargets] can not add path (%v): %v", targetPath, err)
         return
@@ -368,7 +367,7 @@ func (e *EventManager) addTargets(targetPath string, expire int64, actorName str
             newPath = targetPath + "/" + newPath
         }
         if file.IsDir() {
-            e.addTargets(newPath, expire, actorName, actorConfig)
+            e.addTargets(newPath, actorName, actorConfig)
 	    continue
         }
 	fileID, _, err := e.getFileInfo(newPath)
@@ -401,7 +400,7 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
         renameFilesMutex : new(sync.Mutex),
     }
     for _, targetInfo := range config.Targets {
-         eventManager.addTargets(targetInfo.Path, targetInfo.Expire, targetInfo.ActorName, targetInfo.ActorConfig)
+         eventManager.addTargets(targetInfo.Path, targetInfo.ActorName, targetInfo.ActorConfig)
     }
     return eventManager, nil
 }

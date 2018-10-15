@@ -3,7 +3,6 @@ package configurator
 // Target is target
 type Target struct {
     Path string `json:"path" yaml:"path" toml:"path"`
-    Expire int64 `json:"expire" yaml:"expire" toml:"expire"`
     ActorName string `json:"actor_name" yaml:"actor_name" toml:"actor_name"`  
     ActorConfig string `json:"actor_config" yaml:"actor_config" toml:"actor_config"`  
 }
