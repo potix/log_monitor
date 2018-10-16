@@ -12,14 +12,11 @@ import (
 
 // ActorPlugin is actor plugin
 type ActorPlugin interface {
-    Initialize() (error)
     FoundFile(fileName string, fileID string)
     CreatedFile(fileName string, fileID string)
     RemovedFile(fileName string, fileID string)
     RenamedFile(oldFileName string, newFileName string, fileID string)
     ModifiedFile(fileName string, fileID string)
-    ExpiredFile(fileName string, fileID string)
-    Finalize()
 }
 
 const (

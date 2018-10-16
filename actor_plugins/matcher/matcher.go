@@ -1,7 +1,12 @@
 package main
 
 import (
-    "fmt"
+    "log"
+    "time"
+    "sync"
+    "sync/atomic"
+    "context"
+    "golang.org/x/sync/semaphore"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
@@ -9,57 +14,171 @@ import (
     "github.com/potix/log_monitor/actor_plugins/matcher/rulemanager"
 )
 
+type targetInfo struct {
+    fileNameMutex *sync.Mutex
+    fileName string
+    fileID string
+}
+
+func (t *targetInfo) getFileName() (string) {
+    t.fileNameMutex.Lock()
+    defer t.fileNameMutex.Unlock()
+    return t.fileName
+}
+func (t *targetInfo) setFileName(fileName string) {
+    t.fileNameMutex.Lock()
+    defer t.fileNameMutex.Unlock()
+    t.fileName = fileName
+}
+
+func (t *targetInfo) getFileID() (string) {
+    return t.fileID
+}
+
+type fileCheckInfo struct {
+    kickEvent *semaphore.Weighted
+    needCheck uint32
+    finish  uint32
+}
+
+func (f *fileCheckInfo) getNeedCheck() bool {
+    return atomic.CompareAndSwapUint32(&f.needCheck, 1, 0)
+}
+
+func (f *fileCheckInfo) setNeedCheck() {
+    atomic.StoreUint32(&f.needCheck, 1)
+}
+
+func (f *fileCheckInfo) getFinish() bool {
+    return atomic.LoadUint32(&f.finish) == 1
+}
+
+func (f *fileCheckInfo) setFinish() {
+    atomic.StoreUint32(&f.finish, 1)
+}
+
+type expireCheckInfo struct {
+    expire int64
+    finish chan bool
+}
+
+func (e *expireCheckInfo) getExpire() (int64) {
+    return atomic.LoadInt64(&e.expire)
+}
+
+func (e *expireCheckInfo) updateExpire(expire int64) {
+    atomic.StoreInt64(&e.expire, expire)
+}
+
 // Matcher is matcher
 type Matcher struct {
     configurator *configurator.Configurator
-    fileChecker *filechecker.FileChecker
     ruleManager *rulemanager.RuleManager
+    fileChecker *filechecker.FileChecker
+    targetInfo *targetInfo
+    fileCheckInfo *fileCheckInfo
+    expireCheckInfo *expireCheckInfo
 }
 
-// Initialize is initialize
-func (m *Matcher) Initialize() (error) {
-    fmt.Println("initialize")
-    return nil
+func (m *Matcher) fileCheckLoop() {
+    for {
+        m.fileCheckInfo.kickEvent.Acquire(context.Background(), 1)
+        if m.fileCheckInfo.getFinish() {
+            return
+        }
+        if !m.fileCheckInfo.getNeedCheck() {
+            continue
+        }
+        fileID := m.targetInfo.getFileID()
+        fileName := m.targetInfo.getFileName()
+        rule := m.ruleManager.getRule(fileName)
+        if rule == nil {
+            log.Printf("not found rule for target (%v)", fileName)
+            continue
+        }
+        err := m.fileChecker.Check(fileID, fileName, rule)
+        if err != nil {
+            log.Printf("can not check file (%v:%v)", )
+        }
+    }
+}
+
+func (m *Matcher) expireCheckLoop() {
+    for {
+        select {
+        case <-time.After(1*time.Second):
+            t := time.Now().Unix()
+            if t >= m.expireCheckInfo.expire {
+                fileID := m.targetInfo.getFileID()
+                m.fileChecker.Flush(fileID)
+            }
+        case <-m.expireCheckInfo.finish:
+            return
+        }
+    }
+}
+
+func (m *Matcher) initialize(fileName string, fileID string) {
+    rule := m.ruleManager.getRule(fileName)
+    if rule == nil {
+        log.Printf("not found rule for target (%v)", fileName)
+        return
+    } 
+    m.targetInfo = &targetInfo{
+        fileNameMutex: new(sync.Mutex),
+        fileName: fileName,
+        fileID: fileID,
+    }   
+    m.fileCheckInfo = &fileCheckInfo{
+        kickEvent: semaphore.NewWeighted(0),
+        needCheck: 0,
+        finish: 0,
+    }   
+    m.expireCheckInfo = &expireCheckInfo{
+        expire: rule.expire + time.Now().Unix(),
+        finish: make(chan bool),
+    }
+    go m.fileCheckLoop()   
+    go m.expireCheckLoop()   
+}
+
+func (m *Matcher) finalize(fileName string, fileID string) {
+    if m.targetInfo == nil {
+        return
+    }
+    close(m.expireCheckInfo.finish)
+    m.fileCheckInfo.setFinish()
+    m.fileCheckInfo.kickEvent.Release(1)
 }
 
 // FoundFile is add file
 func (m *Matcher) FoundFile(fileName string, fileID string) {
-    fmt.Println("FoundFile", fileID, fileName)
+    m.initialize(fileName, fileID)
 }
 
 // CreatedFile is add file
 func (m *Matcher) CreatedFile(fileName string, fileID string) {
-    fmt.Println("CreatedFile", fileID, fileName)
+    m.initialize(fileName, fileID)
 }
 
 // RemovedFile is remove file
 func (m *Matcher) RemovedFile(fileName string, fileID string) {
-    fmt.Println("RemovedFile", fileID, fileName)
+    m.finalize(fileName, fileID)
 }
 
 // RenamedFile is rename file
 func (m *Matcher) RenamedFile(oldFileName string, newFileName string, fileID string) {
-    fmt.Println("RenamedFile", fileID, oldFileName, newFileName)
+   m.targetInfo.setFileName(newFileName)
 }
 
 // ModifiedFile is modify file
 func (m *Matcher) ModifiedFile(fileName string, fileID string) {
-    fmt.Println("modifiedFile", fileID, fileName)
-}
-
-// ExpiredFile is expire file
-func (m *Matcher) ExpiredFile(fileName string, fileID string) {
-    fmt.Println("expiredFile", fileID, fileName)
-}
-
-// Finalize is finalize
-func (m *Matcher) Finalize() {
-    fmt.Println("finalize")
+    m.fileCheckInfo.kickEvent.Release(1)
 }
 
 // NewMatcher is create new matcher
 func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
-    fmt.Println("configFile = ", configFile)
+    log.Printf("configFile = %v", configFile)
 
     configurator, err := configurator.NewConfigurator(configFile)
     if err != nil {
@@ -71,14 +190,14 @@ func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
     }
 
-    fmt.Println("config = ", config)
+    log.Printf("config = %v", config)
 
     ruleManager, err := rulemanager.NewRuleManager(configurator)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create rule manager")
     }
 
-    fileChecker, err := filechecker.NewFileChecker(ruleManager)
+    fileChecker, err := filechecker.NewFileChecker(config)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create file checker")
     }
@@ -87,6 +206,9 @@ func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
         configurator: configurator,
         fileChecker: fileChecker,
         ruleManager: ruleManager,
+        targetInfo: nil,
+        fileCheckInfo: nil,
+        expireCheckInfo: nil,
     }, nil
 }
 

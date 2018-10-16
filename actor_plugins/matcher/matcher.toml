@@ -1,3 +1,4 @@
+save_path = "save"
 auto_reload = 1
 
 [notifier]

@@ -54,7 +54,7 @@ func (e *EventManager) newActorPlugin(path string) (actorplugger.ActorPlugin, er
     actorPluginFilePath, actorPluginNewFunc, ok := actorplugger.GetActorPlugin(parentPathInfo.actorName)
     actorPluginDir := filepath.Dir(actorPluginFilePath)
     actorPluginConfigPath := filepath.Join(actorPluginDir, parentPathInfo.actorConfig)
-    return  actorPluginNewFunc(actorPluginConfigPath)
+    return actorPluginNewFunc(actorPluginConfigPath)
 }
 
 func (e *EventManager) foundFile(name string, fileID string) {

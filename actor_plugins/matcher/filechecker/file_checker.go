@@ -1,20 +1,18 @@
 package filechecker
 
 import (
-    "github.com/potix/log_monitor/actor_plugins/matcher/rulemanager"
+    "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
 )
 
 // FileChecker is FileChecker
 type FileChecker struct {
-    ruleManager *rulemanager.RuleManager
+     config *configurator.Config
 }
 
-
-
 // NewFileChecker is create new file checker
-func NewFileChecker(ruleManager *rulemanager.RuleManager) (*FileChecker, error) {
+func NewFileChecker(config *configurator.Config) (*FileChecker, error) {
 	return &FileChecker {
-		ruleManager : ruleManager,
+		config: config,
         }, nil
 }
 
