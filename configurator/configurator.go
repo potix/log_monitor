@@ -14,9 +14,16 @@ type Configurator struct {
 	loader     loader
 }
 
-// Load is load
-func (c *Configurator) Load() (*Config, error) {
-        config := new(Config)
+// LoadLogMonitorConfig is load of log monitor
+func (c *Configurator) LoadLogMonitorConfig() (*LogMonitorConfig, error) {
+        config := new(LogMonitorConfig)
+	err := c.loader.load(config)
+        return config, err
+}
+
+// LoadLogRecieverConfig is load of log reciever
+func (c *Configurator) LoadLogRecieverConfig() (*LogRecieverConfig, error) {
+        config := new(LogRecieverConfig)
 	err := c.loader.load(config)
         return config, err
 }

@@ -381,7 +381,7 @@ func (e *EventManager) addTargets(targetPath string, actorName string, actorConf
 
 // NewEventManager is create new event manager
 func NewEventManager(configurator *configurator.Configurator) (*EventManager, error) {
-    config, err := configurator.Load()
+    config, err := configurator.LoadLogMonitorConfig()
     if err != nil {
         return nil, errors.Wrap(err, "can not load config")
     }

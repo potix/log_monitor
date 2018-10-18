@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+// The greeting service definition.
+service Log {
+  // send a log  
+  rpc Transfer (TransferRequest) returns (TransferReply) {}
+}
+
+// The request message containing the user's name.
+message TransferRequest {
+  string label = 1;
+  string host = 2;
+  string path = 3;
+  bytes logData = 4;
+}
+
+// The response message containing the greetings
+message TransferReply {
+  bool success = 1;
+  string msg = 2;
+}

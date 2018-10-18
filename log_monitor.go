@@ -42,7 +42,7 @@ func main() {
 	log.Fatalf("can not create configurator: %v", err)
     }
 
-    config, err := configurator.Load()
+    config, err := configurator.LoadLogMonitorConfig()
     if err != nil {
 	log.Fatalf("can not load config: %v", err)
     }
