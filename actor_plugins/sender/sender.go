@@ -1,6 +1,7 @@
 package main
 
 import (
+    "os"
     "log"
     "time"
     "sync"
@@ -11,6 +12,27 @@ import (
     "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
 )
+
+type targetInfo struct {
+    fileNameMutex *sync.Mutex
+    fileName string
+    fileID string
+}
+
+func (t *targetInfo) getFileName() (string) {
+    t.fileNameMutex.Lock()
+    defer t.fileNameMutex.Unlock()
+    return t.fileName
+}
+func (t *targetInfo) setFileName(fileName string) {
+    t.fileNameMutex.Lock()
+    defer t.fileNameMutex.Unlock()
+    t.fileName = fileName
+}
+
+func (t *targetInfo) getFileID() (string) {
+    return t.fileID
+}
 
 type fileCheckInfo struct {
     kickEvent *semaphore.Weighted
@@ -41,9 +63,11 @@ type flushInfo struct {
 // Sender is matcher
 type Sender struct {
    fileReader *fileReader
+   config *configurator.Config
+   targetInfo *targetInfo
    fileCheckInfo *fileCheckInfo
    flushInfo *flushInfo
-   config *configurator.Config
+   hostname string
 }
 
 func (m *Matcher) fileCheckLoop() {
@@ -52,17 +76,13 @@ func (m *Matcher) fileCheckLoop() {
         if m.fileCheckInfo.getFinish() {
             return
         }
-        if !m.fileCheckInfo.needCheck() {
+        if !m.fileCheckInfo.getNeedCheck() {
             return
         }
         fileID := m.targetInfo.getFileID()
         fileName := m.targetInfo.getFileName()
-        rule := m.ruleManager.getRule(fileName)
-        if rule == nil {
-            log.Printf("not found rule for target (%v)", fileName)
-            continue
-        }
-        err := m.fileChecker.Check(fileID, fileName, rule)
+
+        err := m.fileReader.Read(fileID, fileName, rule)
         if err != nil {
             log.Printf("can not check file (%v:%v)", )
         }
@@ -140,6 +160,10 @@ func (m *Matcher) ModifiedFile(fileName string, fileID string) {
 func NewSender(configFile string) (actorplugger.ActorPlugin, error) {
     log.Printf("configFile = %v", configFile)
 
+    hostname, err := os.Hostname()
+    if err != nil {
+	return nil, errors.Wrap(err, "can not get hostname")
+    }
     configurator, err := configurator.NewConfigurator(configFile)
     if err != nil {
         return nil, errors.Wrapf(err, "can not create configurator (%v)", configFile)
@@ -158,6 +182,7 @@ func NewSender(configFile string) (actorplugger.ActorPlugin, error) {
         targetInfo: nil,
         fileCheckInfo: nil,
         flushInfo: nil,
+        hostname: hostname,
     }, nil
 }
 
