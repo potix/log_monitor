@@ -1,0 +1,3 @@
+addr_port = "0.0.0.0:50000"
+store_root = "."
+path_format = "${LABEL}/${HOST}_${ADDR}/${PATH}"
