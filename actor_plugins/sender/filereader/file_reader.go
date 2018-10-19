@@ -29,8 +29,9 @@ type FileReader struct {
 }
 
 func (f *FileReader)Read(fileID string, filename string) (byte[], error) {
+    needInfoFlush := false
     if f.fileInfo != nil {
-       fileInfo, err := loadFileInfo()
+       fileInfo, err := loadFileInfo(fileID)
        if err != nil { 
            return nil, erros.Wrap(err, "can not load file info") 
        }
@@ -40,7 +41,23 @@ func (f *FileReader)Read(fileID string, filename string) (byte[], error) {
               fileName: fileName,
               pos: 0,
           }
+          needInfoFlush = true
        }
+    }
+    st := stat(filename)
+    if st.size > f.fileInfo.pos {
+        f = f.Open(filename)
+        defer f.Close()
+        reader := NewReader(f) 
+        data, err := reader.ReadBytes('\n')
+        if err != nil {
+            XXXXXX
+        }
+        f.fileInfo.pos + len(data) 
+        needInfoFlush = true
+    }
+    if needInfoFlush {
+        saveFileInfo(fileID)
     }
 }
 
