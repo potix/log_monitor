@@ -9,11 +9,16 @@ import (
     "os/user"
     "regexp"
     "io/ioutil"
+    "path"
     "path/filepath"
     "github.com/pkg/errors"
     "github.com/fsnotify/fsnotify"
     "github.com/potix/log_monitor/configurator"
     "github.com/potix/log_monitor/actorplugger"
+)
+
+const (
+    TRACK_LINK_PATH string = ".__track_link__"
 )
 
 type pathInfo struct {
@@ -54,21 +59,35 @@ func (e *EventManager) newActorPlugin(path string) (actorplugger.ActorPlugin, er
     actorPluginFilePath, actorPluginNewFunc, ok := actorplugger.GetActorPlugin(parentPathInfo.actorName)
     actorPluginDir := filepath.Dir(actorPluginFilePath)
     actorPluginConfigPath := filepath.Join(actorPluginDir, parentPathInfo.actorConfig)
-    return actorPluginNewFunc(actorPluginConfigPath)
+    return actorPluginNewFunc("log_monitor", actorPluginConfigPath)
 }
 
-func (e *EventManager) foundFile(name string, fileID string) {
+func (e *EventManager) foundFile(name string, fileID string) (error) {
+    // create track link path
+    trackLinkPath :=  path.Join(path.Dir(name), TRACK_LINK_PATH)
+    _, err := os.Stat(trackLinkPath)
+    if err != nil {
+        err := os.Mkdir(trackLinkPath, 0755)
+        if err != nil {
+            return errors.Wrapf(err, "[foundFile] can not create track link path (%v)", trackLinkPath)
+        }
+    }
+    // create track link
+    trackLinkFilePath :=  path.Join(trackLinkPath, fileID)
+    err = os.Link(name, trackLinkFilePath)
+    if err != nil {
+        return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
+    }
+    // create plugin
     actorPlugin, err := e.newActorPlugin(name)
     if err != nil {
-	log.Printf("[foundFile] can not create actor plugin (%v, %v): %v", fileID, name, err)
-        return
+	return errors.Wrapf(err, "[foundFile] can not create actor plugin (%v, %v)", fileID, name)
     }
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     _, ok := e.files[name]
     if ok {
-        log.Printf("[found File] already exists file (%v, %v)", name, fileID)
-        return
+        return errors.Errorf("[foundFile] already exists file (%v, %v)", name, fileID)
     }
     e.files[name] = &fileStatus {
         fileID: fileID,
@@ -76,28 +95,49 @@ func (e *EventManager) foundFile(name string, fileID string) {
 	actorPlugin: actorPlugin,
 	mutex : new(sync.Mutex),
     }
-    actorPlugin.FoundFile(name, fileID)
+    actorPlugin.FoundFile(name, fileID, trackLinkFilePath)
+    return nil
 }
 
-func (e *EventManager) createdFile(event fsnotify.Event, fileID string) {
+func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) {
+    // create track link path
+    trackLinkPath :=  path.Join(path.Dir(event.Name), TRACK_LINK_PATH)
+    _, err := os.Stat(trackLinkPath)
+    if err != nil {
+        err := os.Mkdir(trackLinkPath, 0755)
+        if err != nil {
+            return errors.Wrapf(err, "[foundFile] can not create track link path (%v)", trackLinkPath)
+        }
+    }
+    // create track link
+    trackLinkFilePath :=  path.Join(trackLinkPath, fileID)
+    err = os.Link(event.Name, trackLinkFilePath)
+    if err != nil {
+        return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
+    }
+    // create plugin
     actorPlugin, err := e.newActorPlugin(event.Name)
     if err != nil {
-	log.Printf("[createdFile] can not create actor plugin (%v, %v): %v", fileID, event.Name, err)
-        return
+	return errors.Wrapf(err, "[createdFile] can not create actor plugin (%v, %v): %v", fileID, event.Name)
     }
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     status, ok := e.files[event.Name]
     if ok {
         if status.fileID == fileID {
-             log.Printf("[createdFile] already exists file (%v, %v)", fileID, event.Name)
-             return
+             return errors.Errorf("[createdFile] already exists file (%v, %v)", fileID, event.Name)
         }
         // rename to exists file name
         status.mutex.Lock()
         defer status.mutex.Unlock()
-        status.actorPlugin.RemovedFile(event.Name, status.fileID)
+        oldTrackLinkFilePath := path.Join(trackLinkPath, status.fileID)
+        status.actorPlugin.RemovedFile(event.Name, status.fileID, oldTrackLinkFilePath)
         delete(e.files, event.Name)
+        // remove  old track link file
+        err := os.Remove(oldTrackLinkFilePath)
+        if err != nil {
+            log.Printf("[createdFile] can not remove (%v)", oldTrackLinkFilePath)
+        }
     }
 
     // renamed file
@@ -112,7 +152,7 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) {
           e.files[event.Name] = renameInfo.fileStatus
           actorPlugin.RenamedFile(renameInfo.name, event.Name, fileID)
           delete(e.renameFiles, fileID)
-          return
+          return nil
     }
 
     // created file
@@ -122,7 +162,8 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) {
 	actorPlugin: actorPlugin,
 	mutex : new(sync.Mutex),
     }
-    actorPlugin.CreatedFile(event.Name, fileID)
+    actorPlugin.CreatedFile(event.Name, fileID, trackLinkFilePath)
+    return nil
 }
 
 func (e *EventManager) removedFile(event fsnotify.Event) (bool) {
@@ -135,8 +176,22 @@ func (e *EventManager) removedFile(event fsnotify.Event) (bool) {
     }
     status.mutex.Lock()
     defer status.mutex.Unlock()
-    status.actorPlugin.RemovedFile(event.Name, status.fileID)
+    trackLinkPath :=  path.Join(path.Dir(event.Name), TRACK_LINK_PATH)
+    trackLinkFilePath :=  path.Join(trackLinkPath, status.fileID)
+    status.actorPlugin.RemovedFile(event.Name, status.fileID, trackLinkFilePath)
     delete(e.files, event.Name)
+    // check track link path
+    _, err := os.Stat(trackLinkPath)
+    if err != nil {
+         log.Printf("[removedFile] not exists track link path (%v)", trackLinkPath)
+         return true
+    }
+    // remove track link file
+    err = os.Remove(trackLinkFilePath)
+    if err != nil {
+         log.Printf("[removedFile] can not remove (%v)", trackLinkFilePath)
+         return true
+    }
     return true
 }
 
@@ -213,15 +268,20 @@ func (e *EventManager) eventLoop() {
                    break
                }
                if info.IsDir() {
-                   parent := filepath.Dir(event.Name)
-                   info, ok := e.paths[parent]
-                   if !ok {
-                       log.Printf("[event Loop] not found parent %v", parent) 
-                   } else {
-                       e.addPath(event.Name, info.actorName, info.actorConfig)
+                   if path.Base(event.Name) != TRACK_LINK_PATH {
+                       parent := filepath.Dir(event.Name)
+                       info, ok := e.paths[parent]
+                       if !ok {
+                           log.Printf("[event Loop] not found parent %v", parent) 
+                       } else {
+                           e.addPath(event.Name, info.actorName, info.actorConfig)
+                       }
                    }
                } else {
-                   e.createdFile(event, fileID)
+                   err := e.createdFile(event, fileID)
+                   if err !=nil {
+                      log.Printf("[event.Loop] can not add target file (%v): %v", event.Name, err) 
+                   }
                }
             }
             if event.Op&fsnotify.Remove == fsnotify.Remove {
@@ -265,6 +325,11 @@ func (e *EventManager) eventLoop() {
 }
 
 func (e *EventManager) addPath(path string, actorName string, actorConfig string) (error) {
+        trackLinkPath := filepath.Join(path, TRACK_LINK_PATH)
+        err := os.Mkdir(trackLinkPath, 0755)
+        if err != nil {
+            return errors.Wrapf(err, "can not create track link path (%v)", trackLinkPath)
+        } 
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -272,7 +337,7 @@ func (e *EventManager) addPath(path string, actorName string, actorConfig string
             log.Printf("[addPath] already exists path (%v)", path)
             return nil
         }
-        err := e.watcher.Add(path)
+        err = e.watcher.Add(path)
         if err != nil {
             return errors.Wrap(err, "can not add path to watcher")
 	} else {
@@ -350,6 +415,10 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
 }
 
 func (e *EventManager) addTargets(targetPath string, actorName string, actorConfig string) {
+    if path.Base(targetPath) == TRACK_LINK_PATH {
+        // skip track link path
+        return
+    }
     targetPath = e.fixupPath(targetPath)
     fileList, err := ioutil.ReadDir(targetPath)
     if err != nil {
@@ -364,7 +433,7 @@ func (e *EventManager) addTargets(targetPath string, actorName string, actorConf
     for _, file := range fileList {
         newPath := filepath.Join(targetPath, file.Name())
         if (targetPath == "." || targetPath == "./") {
-            newPath = targetPath + "/" + newPath
+            newPath = "." + "/" + newPath
         }
         if file.IsDir() {
             e.addTargets(newPath, actorName, actorConfig)
@@ -375,7 +444,11 @@ func (e *EventManager) addTargets(targetPath string, actorName string, actorConf
             log.Printf("[addTargets] can not get file info (%v)", newPath)
             continue
         }
-	e.foundFile(fileID, newPath)
+	err = e.foundFile(fileID, newPath)
+        if err != nil {
+            log.Printf("[addTargets] can not add target file (%v): %v", newPath, err)
+            continue
+        }
     }
 }
 

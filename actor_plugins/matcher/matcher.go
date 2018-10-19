@@ -72,6 +72,7 @@ func (e *expireCheckInfo) updateExpire(expire int64) {
 
 // Matcher is matcher
 type Matcher struct {
+    callers string
     configurator *configurator.Configurator
     ruleManager *rulemanager.RuleManager
     fileChecker *filechecker.FileChecker
@@ -177,7 +178,7 @@ func (m *Matcher) ModifiedFile(fileName string, fileID string) {
 }
 
 // NewMatcher is create new matcher
-func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
+func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, error) {
     log.Printf("configFile = %v", configFile)
 
     configurator, err := configurator.NewConfigurator(configFile)
@@ -203,6 +204,7 @@ func NewMatcher(configFile string) (actorplugger.ActorPlugin, error) {
     }
 
     return &Matcher {
+        callers: callers + ".matcher"
         configurator: configurator,
         fileChecker: fileChecker,
         ruleManager: ruleManager,

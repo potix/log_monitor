@@ -12,9 +12,9 @@ import (
 
 // ActorPlugin is actor plugin
 type ActorPlugin interface {
-    FoundFile(fileName string, fileID string)
-    CreatedFile(fileName string, fileID string)
-    RemovedFile(fileName string, fileID string)
+    FoundFile(fileName string, fileID string, trackLinkFilePath string)
+    CreatedFile(fileName string, fileID string, trackLinkFilePath string)
+    RemovedFile(fileName string, fileID string, trackLinkFilePath string)
     RenamedFile(oldFileName string, newFileName string, fileID string)
     ModifiedFile(fileName string, fileID string)
 }
@@ -25,7 +25,7 @@ const (
 )
 
 // ActorPluginNewFunc is ActorPluginNewFunc
-type ActorPluginNewFunc func(configFile string) (ActorPlugin, error)
+type ActorPluginNewFunc func(callers string, configFile string) (ActorPlugin, error)
 
 // GetActorPluginInfoFunc is GetActorPluginInfoFunc
 type GetActorPluginInfoFunc func() (string, ActorPluginNewFunc)

@@ -17,6 +17,7 @@ type targetInfo struct {
     fileNameMutex *sync.Mutex
     fileName string
     fileID string
+    trackLinkFile string
 }
 
 func (t *targetInfo) getFileName() (string) {
@@ -32,6 +33,10 @@ func (t *targetInfo) setFileName(fileName string) {
 
 func (t *targetInfo) getFileID() (string) {
     return t.fileID
+}
+
+func (t *targetInfo) getTrackLinkFile() (string) {
+    return t.trackLinkFile
 }
 
 type fileCheckInfo struct {
@@ -62,6 +67,7 @@ type flushInfo struct {
 
 // Sender is matcher
 type Sender struct {
+   callers string
    fileReader *fileReader
    config *configurator.Config
    targetInfo *targetInfo
@@ -81,11 +87,11 @@ func (m *Matcher) fileCheckLoop() {
         }
         fileID := m.targetInfo.getFileID()
         fileName := m.targetInfo.getFileName()
-
-        err := m.fileReader.Read(fileID, fileName, rule)
+        data, err := m.fileReader.Read(fileID, m.targetInfo.getTrackLinkFile())
         if err != nil {
             log.Printf("can not check file (%v:%v)", )
         }
+        // XXXXXXXXXXXX serd grpc
     }
 }
 
@@ -100,11 +106,12 @@ func (m *Matcher) flushLoop() {
     }
 }
 
-func (m *Matcher) initialize(fileName string, fileID string) {
+func (m *Matcher) initialize(fileName string, fileID string, trackLinkFile string) {
     m.targetInfo = &targetInfo{
         fileNameMutex: new(sync.Mutex),
         fileName: fileName,
         fileID: fileID,
+        trackLinkFile: trackLinkFile,
     }
     m.fileCheckInfo = &fileCheckInfo{
         kickEvent: semaphore.NewWeighted(0),
@@ -120,7 +127,7 @@ func (m *Matcher) initialize(fileName string, fileID string) {
     }
 }
 
-func (m *Matcher) finalize(fileName string, fileID string) {
+func (m *Matcher) finalize(fileName string, fileID string, trackLinkFile string) {
     if m.targetInfo == nil {
         return
     }
@@ -130,34 +137,36 @@ func (m *Matcher) finalize(fileName string, fileID string) {
 }
 
 // FoundFile is add file
-func (m *Matcher) FoundFile(fileName string, fileID string) {
-    m.initialize(fileName, fileID)
+func (m *Matcher) FoundFile(fileName string, fileID string, trackLinkFile string) {
+    m.initialize(fileName, fileID, trackLinkFile)
 }
 
 // CreatedFile is add file
-func (m *Matcher) CreatedFile(fileName string, fileID string) {
-    m.initialize(fileName, fileID)
+func (m *Matcher) CreatedFile(fileName string, fileID string, trackLinkFile string) {
+    m.initialize(fileName, fileID, trackLinkFile)
 }
 
 // RemovedFile is remove file
-func (m *Matcher) RemovedFile(fileName string, fileID string) {
-    m.finalize(fileName, fileID)
+func (m *Matcher) RemovedFile(fileName string, fileID string, trackLinkFile string) {
+    m.finalize(fileName, fileID, trackLinkFile)
 }
 
 // RenamedFile is rename file
 func (m *Matcher) RenamedFile(oldFileName string, newFileName string, fileID string) {
    m.targetInfo.setFileName(newFileName)
+   m.fileReader.Rename(fileID, newFileName)
 }
 
 // ModifiedFile is modify file
 func (m *Matcher) ModifiedFile(fileName string, fileID string) {
+    m.fileCheckInfo.setNeedCheck()
     if m.config.FlushInterval == 0 {
         m.fileCheckInfo.kickEvent.Release(1)
     }
 }
 
 // NewSender is create new matcher
-func NewSender(configFile string) (actorplugger.ActorPlugin, error) {
+func NewSender(callers string, configFile string) (actorplugger.ActorPlugin, error) {
     log.Printf("configFile = %v", configFile)
 
     hostname, err := os.Hostname()
@@ -176,7 +185,10 @@ func NewSender(configFile string) (actorplugger.ActorPlugin, error) {
 
     log.Printf("config = %v", config)
 
+    newCallers = callers + ".sender"
+
     return &Matcher {
+        callers: newCallers,
         fileReader: fileReader,
         config: config,
         targetInfo: nil,
