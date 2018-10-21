@@ -93,6 +93,34 @@ func (s *Sender) fileCheckLoop() {
             log.Printf("can not check file (%v:%v)", )
         }
         // XXXXXXXXXXXX serd grpc
+	transferRequest := logpb.TransferRequest {
+		Label: s.config.Label,
+		Host: s.hostname,
+		Path: fileName,
+		LogData: data, 
+	}
+
+	conn, err := grpc.Dial("127.0.0.1:19003", nil)
+	client := logpb.NewLogClient(conn) LogClient {
+	client.Transfer(context.BackGround(), transferRequest, nil) (*TransferReply, error) {
+			        out := new(TransferReply)
+				        err := c.cc.Invoke(ctx, "/Log/Transfer", in, out, opts...)
+					        if err != nil {
+							                return nil, err
+									        }
+										        return out, nil
+										}
+
+										o    conn, err := grpc.Dial("127.0.0.1:19003", grpc.WithInsecure())
+										    if err != nil {
+											            log.Fatal("client connection error:", err)
+												        }
+													    defer conn.Close()
+													        client := pb.NewCatClient(conn)
+														    message := &pb.GetMyCatMessage{"tama"}
+														        res, err := client.GetMyCat(context.TODO(), message)
+
+
     }
 }
 
