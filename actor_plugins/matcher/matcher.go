@@ -204,7 +204,7 @@ func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, er
     }
 
     return &Matcher {
-        callers: callers + ".matcher"
+        callers: callers + ".matcher",
         configurator: configurator,
         fileChecker: fileChecker,
         ruleManager: ruleManager,

@@ -10,6 +10,7 @@ import (
     logpb "github.com/potix/log_monitor/logpb"
 )
 
+// Reciever is reciever
 type Reciever struct {
     listen net.Listener
     server *grpc.Server
@@ -28,9 +29,10 @@ func (r *Reciever) getRemoteAddr(ctx context.Context) (string) {
     return tcpAddr.IP.String()
 }
 
+// Transfer is transfer
 func (r *Reciever) Transfer(ctx context.Context, request *logpb.TransferRequest) (*logpb.TransferReply, error) {
      addr := r.getRemoteAddr(ctx)
-     err := logstore.Save(ctx, addr, logpb.TransferRequest)
+     err := logstore.Save(ctx, addr, request)
      if err != nil {
         return &logpb.TransferReply{
             Success: false,
@@ -43,6 +45,7 @@ func (r *Reciever) Transfer(ctx context.Context, request *logpb.TransferRequest)
      }, nil
 }
 
+// Start is start
 func (r *Reciever) Start() (error) {
     err := r.server.Serve(r.listen)
     if err != nil { 
@@ -51,10 +54,12 @@ func (r *Reciever) Start() (error) {
     return nil
 }
 
+// Stop is stop
 func (r *Reciever) Stop() {
      r.server.GracefulStop()
 }
 
+// NewReciever is create new reciver
 func NewReciever(config *configurator.LogRecieverConfig) (error){
     listen, err := net.Listen("tcp", config.AddrPort)
     if err != nil {

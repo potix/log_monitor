@@ -54,7 +54,7 @@ func main() {
 
     err = actorplugger.LoadActorPlugins(config.ActorPluginPath)
     if err != nil {
-	log.Fatalf("can not load actor plugins (%v): ", config.ActorPluginPath, err)
+	log.Fatalf("can not load actor plugins (%v): %v", config.ActorPluginPath, err)
     }
 
     eventManager, err := eventmanager.NewEventManager(configurator)

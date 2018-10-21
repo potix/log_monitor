@@ -1,6 +1,10 @@
 package main
 
 import (
+    "os/signal"
+    "syscall"
+    "flag"
+    "log"
     "github.com/potix/log_monitor/reciever"
 )
 
