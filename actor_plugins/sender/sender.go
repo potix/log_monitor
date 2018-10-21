@@ -10,7 +10,8 @@ import (
     "golang.org/x/sync/semaphore"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actorplugger"
-    "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
+    "github.com/potix/log_monitor/actor_plugins/sender/filereader"
+    "github.com/potix/log_monitor/actor_plugins/sender/configurator"
 )
 
 type targetInfo struct {
@@ -68,7 +69,7 @@ type flushInfo struct {
 // Sender is matcher
 type Sender struct {
    callers string
-   fileReader *fileReader
+   fileReader *filereader.FileReader
    config *configurator.Config
    targetInfo *targetInfo
    fileCheckInfo *fileCheckInfo
@@ -76,18 +77,18 @@ type Sender struct {
    hostname string
 }
 
-func (m *Matcher) fileCheckLoop() {
+func (s *Sender) fileCheckLoop() {
     for {
-        m.fileCheckInfo.kickEvent.Acquire(context.Background(), 1)
-        if m.fileCheckInfo.getFinish() {
+        s.fileCheckInfo.kickEvent.Acquire(context.Background(), 1)
+        if s.fileCheckInfo.getFinish() {
             return
         }
-        if !m.fileCheckInfo.getNeedCheck() {
+        if !s.fileCheckInfo.getNeedCheck() {
             return
         }
-        fileID := m.targetInfo.getFileID()
-        fileName := m.targetInfo.getFileName()
-        data, err := m.fileReader.Read(fileID, m.targetInfo.getTrackLinkFile())
+        fileID := s.targetInfo.getFileID()
+        fileName := s.targetInfo.getFileName()
+        data, err := s.fileReader.Read(fileID, s.targetInfo.getTrackLinkFile())
         if err != nil {
             log.Printf("can not check file (%v:%v)", )
         }
@@ -95,80 +96,78 @@ func (m *Matcher) fileCheckLoop() {
     }
 }
 
-func (m *Matcher) flushLoop() {
+func (s *Sender) flushLoop() {
     for {
         select {
-        case <-time.After(m.config.FlushInterval*time.Second):
-            m.fileCheckInfo.kickEvent.Release(1)
-        case <-m.flushInfo.finish:
+        case <-time.After(time.Duration(s.config.FlushInterval) * time.Second):
+            s.fileCheckInfo.kickEvent.Release(1)
+        case <-s.flushInfo.finish:
             return
         }
     }
 }
 
-func (m *Matcher) initialize(fileName string, fileID string, trackLinkFile string) {
-    m.targetInfo = &targetInfo{
+func (s *Sender) initialize(fileName string, fileID string, trackLinkFile string) {
+    s.targetInfo = &targetInfo{
         fileNameMutex: new(sync.Mutex),
         fileName: fileName,
         fileID: fileID,
         trackLinkFile: trackLinkFile,
     }
-    m.fileCheckInfo = &fileCheckInfo{
+    s.fileCheckInfo = &fileCheckInfo{
         kickEvent: semaphore.NewWeighted(0),
         needCheck: 0,
         finish: 0,
     }
-    m.flushInfo = &flushInfo{
+    s.flushInfo = &flushInfo{
         finish: make(chan bool),
     }
-    go m.fileCheckLoop()
-    if m.config.FlushInterval != 0 {
-         go m.flushLoop()
+    go s.fileCheckLoop()
+    if s.config.FlushInterval != 0 {
+         go s.flushLoop()
     }
 }
 
-func (m *Matcher) finalize(fileName string, fileID string, trackLinkFile string) {
-    if m.targetInfo == nil {
+func (s *Sender) finalize(fileName string, fileID string, trackLinkFile string) {
+    if s.targetInfo == nil {
         return
     }
-    close(m.flushInfo.finish)
-    m.fileCheckInfo.setFinish()
-    m.fileCheckInfo.kickEvent.Release(1)
+    close(s.flushInfo.finish)
+    s.fileCheckInfo.setFinish()
+    s.fileCheckInfo.kickEvent.Release(1)
 }
 
 // FoundFile is add file
-func (m *Matcher) FoundFile(fileName string, fileID string, trackLinkFile string) {
-    m.initialize(fileName, fileID, trackLinkFile)
+func (s *Sender) FoundFile(fileName string, fileID string, trackLinkFile string) {
+    s.initialize(fileName, fileID, trackLinkFile)
 }
 
 // CreatedFile is add file
-func (m *Matcher) CreatedFile(fileName string, fileID string, trackLinkFile string) {
-    m.initialize(fileName, fileID, trackLinkFile)
+func (s *Sender) CreatedFile(fileName string, fileID string, trackLinkFile string) {
+    s.initialize(fileName, fileID, trackLinkFile)
 }
 
 // RemovedFile is remove file
-func (m *Matcher) RemovedFile(fileName string, fileID string, trackLinkFile string) {
-    m.finalize(fileName, fileID, trackLinkFile)
+func (s *Sender) RemovedFile(fileName string, fileID string, trackLinkFile string) {
+    s.finalize(fileName, fileID, trackLinkFile)
 }
 
 // RenamedFile is rename file
-func (m *Matcher) RenamedFile(oldFileName string, newFileName string, fileID string) {
-   m.targetInfo.setFileName(newFileName)
-   m.fileReader.Rename(fileID, newFileName)
+func (s *Sender) RenamedFile(oldFileName string, newFileName string, fileID string) {
+    s.targetInfo.setFileName(newFileName)
 }
 
 // ModifiedFile is modify file
-func (m *Matcher) ModifiedFile(fileName string, fileID string) {
-    m.fileCheckInfo.setNeedCheck()
-    if m.config.FlushInterval == 0 {
-        m.fileCheckInfo.kickEvent.Release(1)
+func (s *Sender) ModifiedFile(fileName string, fileID string) {
+    s.fileCheckInfo.setNeedCheck()
+    if s.config.FlushInterval == 0 {
+        s.fileCheckInfo.kickEvent.Release(1)
     }
 }
 
 // NewSender is create new matcher
 func NewSender(callers string, configFile string) (actorplugger.ActorPlugin, error) {
     log.Printf("configFile = %v", configFile)
-
     hostname, err := os.Hostname()
     if err != nil {
 	return nil, errors.Wrap(err, "can not get hostname")
@@ -182,12 +181,10 @@ func NewSender(callers string, configFile string) (actorplugger.ActorPlugin, err
     if err != nil {
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
     }
-
     log.Printf("config = %v", config)
-
-    newCallers = callers + ".sender"
-
-    return &Matcher {
+    newCallers := callers + ".sender"
+    fileReader := filereader.NewFileReader(newCallers, config)
+    return &Sender {
         callers: newCallers,
         fileReader: fileReader,
         config: config,

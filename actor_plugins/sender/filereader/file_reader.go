@@ -2,8 +2,12 @@ package filereader
 
 import (
     "os"
-    "encode/gob"
-    "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
+    "log"
+    "bufio"
+    "path/filepath"
+    "encoding/gob"
+    "github.com/pkg/errors"
+    "github.com/potix/log_monitor/actor_plugins/sender/configurator"
 )
 
 type fileInfo struct {
@@ -20,84 +24,84 @@ type FileReader struct {
 }
 
 func (f * FileReader)loadFileInfo(fileID string) (error) {
-    infoFilePath := path.Join(caller, fileID)
+    infoFilePath := filepath.Join(f.callers, fileID)
     _, err := os.Stat(infoFilePath)
     if err != nil {
         return nil
     }
-    f, err := os.Read(infoFilePath)
+    file, err := os.Open(infoFilePath)
     if err != nil {
-        errors.Wrapf(err, "can not read file info")
+        errors.Wrapf(err, "can not read file info (%v)", infoFilePath)
     }
-    defer f.Close()
-    enc := gob.NewDecoder(f)
+    defer file.Close()
+    enc := gob.NewDecoder(file)
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
-        errors.Wrapf(err, "can not decode file info")
+        errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
     return nil
 }
 
 func (f *FileReader)saveFileInfo(fileID string) (error) {
-    infoFilePath := path.Join(caller, fileID)
-    f, err := os.Create(infoFilePath)
+    infoFilePath := filepath.Join(f.callers, fileID)
+    file, err := os.Create(infoFilePath)
     if err != nil {
-        errors.Wrapf(err, "can not create file info")
+        errors.Wrapf(err, "can not create file info (%v)", infoFilePath)
     }
-    defer f.Close()
-    enc := gob.NewEncoder(f)
+    defer file.Close()
+    enc := gob.NewEncoder(file)
     err = enc.Encode(f.fileInfo)
     if err != nil {
-        errors.Wrapf(err, "can not encode file info")
+        errors.Wrapf(err, "can not encode file info (%v)", infoFilePath)
     }
     return nil
 }
 
 func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, error) {
-    needInfoFlush := false
-    err := loadFileInfo(fileID)
-    if err != nil {
-        return nil, erros.Wrap(err, "can not load file info")
-    }
-    if fileInfo == nil {
+    if f.fileInfo == nil {
+        err := f.loadFileInfo(fileID)
+        if err != nil {
+            return nil, errors.Wrapf(err, "can not load file info (%v)", fileID)
+        }
         f.fileInfo = &fileInfo{
             fileID: fileID,
-            fileName: fileName,
+            trackLinkFile: trackLinkFile,
             pos: 0,
         }
-        needInfoFlush = true
-    }
-    fi, err := os.Stat(trackLinkFile)
-    if err != nil {
-        return nil, erros.Wrap(err, "not found trackLinkFile (%v)", fi)
-    }
-    if fi.Size() > f.fileInfo.pos {
-	f, err := f.Open(trackLinkFile)
-	if err != nil {
-            return nil, errors.Wrap(err, "can not open trackLinkFile")
-	}
-        defer f.Close()
-        reader := NewReader(f)
-        data, err := reader.ReadBytes('\n')
-        if err != nil {
-            return nil, errors.Wrap(err, "can not read trackLinkFile")
-        }
-        f.fileInfo.pos + len(data)
-        needInfoFlush = true
-    }
-    if needInfoFlush {
-	err := saveFileInfo(fileID)
+	err = f.saveFileInfo(fileID)
 	if err != nil {
 	    log.Printf("can not save file info: %v", err)
 	}
     }
-    return data, nil
+    fi, err := os.Stat(trackLinkFile)
+    if err != nil {
+        return nil, errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
+    }
+    if fi.Size() > f.fileInfo.pos {
+	file, err := os.Open(trackLinkFile)
+	if err != nil {
+            return nil, errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
+	}
+        defer file.Close()
+        reader := bufio.NewReader(file)
+        data, err := reader.ReadBytes('\n')
+        if err != nil {
+            return nil, errors.Wrapf(err, "can not read trackLinkFile (%v)", trackLinkFile)
+        }
+        f.fileInfo.pos += int64(len(data))
+	err = f.saveFileInfo(fileID)
+	if err != nil {
+	    log.Printf("can not save file info: %v", err)
+	}
+        return data, nil
+    }
+    return nil, nil
 }
 
 // NewFileReader is create new file reader
-func NewFileReader(callers string, config *configurator.Config) {
+func NewFileReader(callers string, config *configurator.Config) (*FileReader) {
     return &FileReader {
         callers: callers,
         config: config,
