@@ -18,6 +18,7 @@ type targetInfo struct {
     fileNameMutex *sync.Mutex
     fileName string
     fileID string
+    trackLinkFilePath string
 }
 
 func (t *targetInfo) getFileName() (string) {
@@ -33,6 +34,10 @@ func (t *targetInfo) setFileName(fileName string) {
 
 func (t *targetInfo) getFileID() (string) {
     return t.fileID
+}
+
+func (t *targetInfo) getTrackLinkFilePath() (string) {
+    return t.trackLinkFilePath
 }
 
 type fileCheckInfo struct {
@@ -92,12 +97,13 @@ func (m *Matcher) fileCheckLoop() {
         }
         fileID := m.targetInfo.getFileID()
         fileName := m.targetInfo.getFileName()
+        trackLinkFilePath := m.targetInfo.getTrackLinkFilePath()
         rule := m.ruleManager.getRule(fileName)
         if rule == nil {
             log.Printf("not found rule for target (%v)", fileName)
             continue
         }
-        err := m.fileChecker.Check(fileID, fileName, rule)
+        err := m.fileChecker.Check(fileID, trackLinkFilePath, fileName, rule)
         if err != nil {
             log.Printf("can not check file (%v:%v)", )
         }
@@ -119,7 +125,7 @@ func (m *Matcher) expireCheckLoop() {
     }
 }
 
-func (m *Matcher) initialize(fileName string, fileID string) {
+func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath string) {
     rule := m.ruleManager.getRule(fileName)
     if rule == nil {
         log.Printf("not found rule for target (%v)", fileName)
@@ -129,6 +135,7 @@ func (m *Matcher) initialize(fileName string, fileID string) {
         fileNameMutex: new(sync.Mutex),
         fileName: fileName,
         fileID: fileID,
+        trackLinkFilePath: trackLinkFilePath,
     }   
     m.fileCheckInfo = &fileCheckInfo{
         kickEvent: semaphore.NewWeighted(0),
@@ -143,7 +150,7 @@ func (m *Matcher) initialize(fileName string, fileID string) {
     go m.expireCheckLoop()   
 }
 
-func (m *Matcher) finalize(fileName string, fileID string) {
+func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath string) {
     if m.targetInfo == nil {
         return
     }
@@ -153,18 +160,18 @@ func (m *Matcher) finalize(fileName string, fileID string) {
 }
 
 // FoundFile is add file
-func (m *Matcher) FoundFile(fileName string, fileID string) {
-    m.initialize(fileName, fileID)
+func (m *Matcher) FoundFile(fileName string, fileID string, trackLinkFilePath string) {
+    m.initialize(fileName, fileID, trackLinkFilePath)
 }
 
 // CreatedFile is add file
-func (m *Matcher) CreatedFile(fileName string, fileID string) {
-    m.initialize(fileName, fileID)
+func (m *Matcher) CreatedFile(fileName string, fileID string, trackLinkFilePath string) {
+    m.initialize(fileName, fileID, trackLinkFilePath)
 }
 
 // RemovedFile is remove file
-func (m *Matcher) RemovedFile(fileName string, fileID string) {
-    m.finalize(fileName, fileID)
+func (m *Matcher) RemovedFile(fileName string, fileID string, trackLinkFilePath string) {
+    m.finalize(fileName, fileID, trackLinkFilePath)
 }
 
 // RenamedFile is rename file
@@ -180,29 +187,23 @@ func (m *Matcher) ModifiedFile(fileName string, fileID string) {
 // NewMatcher is create new matcher
 func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, error) {
     log.Printf("configFile = %v", configFile)
-
     configurator, err := configurator.NewConfigurator(configFile)
     if err != nil {
         return nil, errors.Wrapf(err, "can not create configurator (%v)", configFile)
     }
-
     config, err := configurator.Load()
     if err != nil {
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
     }
-
     log.Printf("config = %v", config)
-
     ruleManager, err := rulemanager.NewRuleManager(configurator)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create rule manager")
     }
-
     fileChecker, err := filechecker.NewFileChecker(config)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create file checker")
     }
-
     return &Matcher {
         callers: callers + ".matcher",
         configurator: configurator,
