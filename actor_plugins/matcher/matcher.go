@@ -98,7 +98,7 @@ func (m *Matcher) fileCheckLoop() {
         fileID := m.targetInfo.getFileID()
         fileName := m.targetInfo.getFileName()
         trackLinkFilePath := m.targetInfo.getTrackLinkFilePath()
-        rule := m.ruleManager.getRule(fileName)
+	rule := m.ruleManager.GetRule(fileName)
         if rule == nil {
             log.Printf("not found rule for target (%v)", fileName)
             continue
@@ -130,25 +130,25 @@ func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath s
     if rule == nil {
         log.Printf("not found rule for target (%v)", fileName)
         return
-    } 
+    }
     m.targetInfo = &targetInfo{
         fileNameMutex: new(sync.Mutex),
         fileName: fileName,
         fileID: fileID,
         trackLinkFilePath: trackLinkFilePath,
-    }   
+    }
     m.fileCheckInfo = &fileCheckInfo{
         kickEvent: semaphore.NewWeighted(0),
         needCheck: 0,
         finish: 0,
-    }   
+    }
     m.expireCheckInfo = &expireCheckInfo{
-        expire: rule.expire + time.Now().Unix(),
+        expire: rule.Expire + time.Now().Unix(),
         finish: make(chan bool),
     }
-    m.ruleManage.Start()
-    go m.fileCheckLoop()   
-    go m.expireCheckLoop()   
+    m.ruleManager.Start()
+    go m.fileCheckLoop()
+    go m.expireCheckLoop()
 }
 
 func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath string) {
@@ -158,7 +158,7 @@ func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath str
     close(m.expireCheckInfo.finish)
     m.fileCheckInfo.setFinish()
     m.fileCheckInfo.kickEvent.Release(1)
-    m.ruleManage.Stop()
+    m.ruleManager.Stop()
 }
 
 // FoundFile is add file
@@ -198,7 +198,7 @@ func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, er
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
     }
     log.Printf("config = %v", config)
-    ruleManager, err := rulemanager.NewRuleManager(configurator)
+    ruleManager, err := rulemanager.NewRuleManager(config, configurator)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create rule manager")
     }
