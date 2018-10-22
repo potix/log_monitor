@@ -1,16 +1,15 @@
-save_path = "save"
 auto_reload = 1
 
-[notifier]
+[notifiers]
 
-  [notifier.my_mail]
-  plugin="mail"
+  [notifiers.my_mail]
+  name="mail"
   config="mail.toml"
 
-[matcher]
+[matchers]
 
-  [matcher.error_message]
-  file_pattern="^.+message.+$"
+  [matchers.error_message]
+  path_pattern="^.+message.+$"
   msg_pattern="^.+ error.+$"
   expire=172800
   notifire="my_mail"

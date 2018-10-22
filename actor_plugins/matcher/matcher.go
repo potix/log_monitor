@@ -126,7 +126,7 @@ func (m *Matcher) expireCheckLoop() {
 }
 
 func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath string) {
-    rule := m.ruleManager.getRule(fileName)
+    rule := m.ruleManager.GetRule(fileName)
     if rule == nil {
         log.Printf("not found rule for target (%v)", fileName)
         return
@@ -146,6 +146,7 @@ func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath s
         expire: rule.expire + time.Now().Unix(),
         finish: make(chan bool),
     }
+    m.ruleManage.Start()
     go m.fileCheckLoop()   
     go m.expireCheckLoop()   
 }
@@ -157,6 +158,7 @@ func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath str
     close(m.expireCheckInfo.finish)
     m.fileCheckInfo.setFinish()
     m.fileCheckInfo.kickEvent.Release(1)
+    m.ruleManage.Stop()
 }
 
 // FoundFile is add file
