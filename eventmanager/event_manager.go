@@ -22,14 +22,13 @@ const (
 )
 
 type pathInfo struct {
-    actorName string
-    actorConfig string
+    actors []*configurator.Actor
 }
 
 type fileStatus struct {
     fileID string
     dirty bool
-    actorPlugin actorplugger.ActorPlugin
+    actorPlugins []actorplugger.ActorPlugin
     mutex *sync.Mutex
 }
 
@@ -50,16 +49,27 @@ type EventManager struct{
     renameFilesMutex *sync.Mutex
 }
 
-func (e *EventManager) newActorPlugin(path string) (actorplugger.ActorPlugin, error) {
+func (e *EventManager) newActorPlugins(path string) ([]actorplugger.ActorPlugin, error) {
     parentDir := filepath.Dir(path)
     parentPathInfo, ok := e.getPathInfo(parentDir)
     if !ok {
         return nil, errors.Errorf("not found parent path info (%v, %v)", path, parentDir)
     }
-    actorPluginFilePath, actorPluginNewFunc, ok := actorplugger.GetActorPlugin(parentPathInfo.actorName)
-    actorPluginDir := filepath.Dir(actorPluginFilePath)
-    actorPluginConfigPath := filepath.Join(actorPluginDir, parentPathInfo.actorConfig)
-    return actorPluginNewFunc("log_monitor", actorPluginConfigPath)
+    newPlugins := make([]actorplugger.ActorPlugin, 0, len(parentPathInfo.actors))
+    for _, actor := range parentPathInfo.actors {
+        actorPluginFilePath, actorPluginNewFunc, ok := actorplugger.GetActorPlugin(actor.Name)
+        if !ok {
+            return nil, errors.Errorf("not found plugin (%v)", actor.Name)
+        }
+        actorPluginDir := filepath.Dir(actorPluginFilePath)
+        actorPluginConfigPath := filepath.Join(actorPluginDir, actor.Config)
+        newActorPlugin, err :=  actorPluginNewFunc("log_monitor", actorPluginConfigPath)
+        if err != nil {
+            return nil, errors.Wrapf(err, "can not create plugin (%v)", actor.Name)
+        }
+        newPlugins = append(newPlugins, newActorPlugin)
+    }
+    return newPlugins, nil
 }
 
 func (e *EventManager) foundFile(name string, fileID string) (error) {
@@ -79,7 +89,7 @@ func (e *EventManager) foundFile(name string, fileID string) (error) {
         return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
     }
     // create plugin
-    actorPlugin, err := e.newActorPlugin(name)
+    actorPlugins, err := e.newActorPlugins(name)
     if err != nil {
 	return errors.Wrapf(err, "[foundFile] can not create actor plugin (%v, %v)", fileID, name)
     }
@@ -92,10 +102,12 @@ func (e *EventManager) foundFile(name string, fileID string) (error) {
     e.files[name] = &fileStatus {
         fileID: fileID,
         dirty: true,
-	actorPlugin: actorPlugin,
+	actorPlugins: actorPlugins,
 	mutex : new(sync.Mutex),
     }
-    actorPlugin.FoundFile(name, fileID, trackLinkFilePath)
+    for _, actorPlugin := range actorPlugins {
+         actorPlugin.FoundFile(name, fileID, trackLinkFilePath)
+    }
     return nil
 }
 
@@ -116,7 +128,7 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
         return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
     }
     // create plugin
-    actorPlugin, err := e.newActorPlugin(event.Name)
+    actorPlugins, err := e.newActorPlugins(event.Name)
     if err != nil {
 	return errors.Wrapf(err, "[createdFile] can not create actor plugin (%v, %v): %v", fileID, event.Name)
     }
@@ -131,7 +143,9 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
         status.mutex.Lock()
         defer status.mutex.Unlock()
         oldTrackLinkFilePath := path.Join(trackLinkPath, status.fileID)
-        status.actorPlugin.RemovedFile(event.Name, status.fileID, oldTrackLinkFilePath)
+        for _, actorPlugin := range status.actorPlugins {
+            actorPlugin.RemovedFile(event.Name, status.fileID, oldTrackLinkFilePath)
+        }
         delete(e.files, event.Name)
         // remove  old track link file
         err := os.Remove(oldTrackLinkFilePath)
@@ -147,10 +161,12 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
     if ok {
           renameInfo.fileStatus.mutex.Lock()
           defer renameInfo.fileStatus.mutex.Unlock()
-          renameInfo.fileStatus.actorPlugin = actorPlugin
+          renameInfo.fileStatus.actorPlugins = actorPlugins
           renameInfo.fileStatus.dirty = true
           e.files[event.Name] = renameInfo.fileStatus
-          actorPlugin.RenamedFile(renameInfo.name, event.Name, fileID)
+          for _, actorPlugin := range actorPlugins {
+              actorPlugin.RenamedFile(renameInfo.name, event.Name, fileID)
+          }
           delete(e.renameFiles, fileID)
           return nil
     }
@@ -159,10 +175,12 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
     e.files[event.Name] = &fileStatus {
         fileID: fileID,
         dirty: true,
-	actorPlugin: actorPlugin,
+	actorPlugins: actorPlugins,
 	mutex : new(sync.Mutex),
     }
-    actorPlugin.CreatedFile(event.Name, fileID, trackLinkFilePath)
+    for _, actorPlugin := range actorPlugins {
+        actorPlugin.CreatedFile(event.Name, fileID, trackLinkFilePath)
+    }
     return nil
 }
 
@@ -178,7 +196,9 @@ func (e *EventManager) removedFile(event fsnotify.Event) (bool) {
     defer status.mutex.Unlock()
     trackLinkPath :=  path.Join(path.Dir(event.Name), TRACK_LINK_PATH)
     trackLinkFilePath :=  path.Join(trackLinkPath, status.fileID)
-    status.actorPlugin.RemovedFile(event.Name, status.fileID, trackLinkFilePath)
+    for _, actorPlugin := range status.actorPlugins {
+        actorPlugin.RemovedFile(event.Name, status.fileID, trackLinkFilePath)
+    }
     delete(e.files, event.Name)
     // check track link path
     _, err := os.Stat(trackLinkPath)
@@ -242,7 +262,9 @@ func (e *EventManager) modifiedFile(event fsnotify.Event) {
         log.Printf("[modifiedFile] not dirty  (%v, %v)", event.Name, status.fileID)
         return
     }
-    status.actorPlugin.ModifiedFile(event.Name, status.fileID)
+    for _, actorPlugin := range status.actorPlugins {
+        actorPlugin.ModifiedFile(event.Name, status.fileID)
+    }
     status.dirty = false
 }
 
@@ -274,7 +296,7 @@ func (e *EventManager) eventLoop() {
                        if !ok {
                            log.Printf("[event Loop] not found parent %v", parent) 
                        } else {
-                           e.addPath(event.Name, info.actorName, info.actorConfig)
+                           e.addPath(event.Name, info.actors)
                        }
                    }
                } else {
@@ -324,7 +346,7 @@ func (e *EventManager) eventLoop() {
     }
 }
 
-func (e *EventManager) addPath(path string, actorName string, actorConfig string) (error) {
+func (e *EventManager) addPath(path string, actors []*configurator.Actor) (error) {
         trackLinkPath := filepath.Join(path, TRACK_LINK_PATH)
         err := os.Mkdir(trackLinkPath, 0755)
         if err != nil {
@@ -342,8 +364,7 @@ func (e *EventManager) addPath(path string, actorName string, actorConfig string
             return errors.Wrap(err, "can not add path to watcher")
 	} else {
             e.paths[path] = &pathInfo{
-                actorName: actorName,
-                actorConfig: actorConfig,
+                actors: actors,
             }
         }
         log.Printf("[addPath] add path (%v)", path)
@@ -414,7 +435,7 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
     return re.ReplaceAllString(targetPath, u.HomeDir+"/")
 }
 
-func (e *EventManager) addTargets(targetPath string, actorName string, actorConfig string) {
+func (e *EventManager) addTargets(targetPath string, actors []*configurator.Actor) {
     if path.Base(targetPath) == TRACK_LINK_PATH {
         // skip track link path
         return
@@ -425,7 +446,7 @@ func (e *EventManager) addTargets(targetPath string, actorName string, actorConf
         log.Printf("[addTargets] can not read dir (%v): %v", targetPath, err)
         return
     }
-    err = e.addPath(targetPath, actorName, actorConfig)
+    err = e.addPath(targetPath, actors)
     if err != nil {
         log.Printf("[addTargets] can not add path (%v): %v", targetPath, err)
         return
@@ -436,7 +457,7 @@ func (e *EventManager) addTargets(targetPath string, actorName string, actorConf
             newPath = "." + "/" + newPath
         }
         if file.IsDir() {
-            e.addTargets(newPath, actorName, actorConfig)
+            e.addTargets(newPath, actors)
 	    continue
         }
 	fileID, _, err := e.getFileInfo(newPath)
@@ -473,7 +494,7 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
         renameFilesMutex : new(sync.Mutex),
     }
     for _, targetInfo := range config.Targets {
-         eventManager.addTargets(targetInfo.Path, targetInfo.ActorName, targetInfo.ActorConfig)
+         eventManager.addTargets(targetInfo.Path, targetInfo.Actors)
     }
     return eventManager, nil
 }

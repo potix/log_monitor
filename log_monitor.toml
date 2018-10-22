@@ -5,5 +5,9 @@ actor_config = "matcher.toml"
 [targets]
   [targets.var_log]
   path = "."
-  actor_name = "matcher"
-  actor_config = "matcher.toml"
+  [[ actors ]]
+  name = "sender"
+  config = "sender.toml"
+  [[ actors ]]
+  name = "matcher"
+  config = "matcher.toml"
