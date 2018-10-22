@@ -7,11 +7,13 @@ import (
     "sync"
     "sync/atomic"
     "context"
+    "google.golang.org/grpc"
     "golang.org/x/sync/semaphore"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/sender/filereader"
     "github.com/potix/log_monitor/actor_plugins/sender/configurator"
+    logpb "github.com/potix/log_monitor/logpb"
 )
 
 type targetInfo struct {
@@ -90,22 +92,31 @@ func (s *Sender) fileCheckLoop() {
         fileName := s.targetInfo.getFileName()
         data, err := s.fileReader.Read(fileID, s.targetInfo.getTrackLinkFile())
         if err != nil {
-            log.Printf("can not check file (%v:%v)", )
+            log.Printf("can not check file (%v): %v", err)
+            continue
         }
-        // XXXXXXXXXXXX serd grpc
-	transferRequest := logpb.TransferRequest {
+	transferRequest := &logpb.TransferRequest {
 		Label: s.config.Label,
 		Host: s.hostname,
 		Path: fileName,
 		LogData: data,
 	}
-	conn, err := grpc.Dial("127.0.0.1:19003", nil)
+	conn, err := grpc.Dial("127.0.0.1:19003",  grpc.WithInsecure())
 	if err != nil {
+            log.Printf("can not dial: %v", err)
+            continue
 	}
 	client := logpb.NewLogClient(conn)
-	transferReply, err := client.Transfer(context.BackGround(), transferRequest)
+	transferReply, err := client.Transfer(context.Background(), transferRequest)
 	if err != nil {
+            log.Printf("can not recieve reply : %v", err)
+            continue
 	}
+        if !transferReply.Success  {
+            log.Printf("can not transfer : %v", transferReply.Msg)
+            continue
+        }
+        s.fileReader.UpdatePosition(len(data))
     }
 }
 

@@ -90,15 +90,23 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, error) {
         if err != nil {
             return nil, errors.Wrapf(err, "can not read trackLinkFile (%v)", trackLinkFile)
         }
-        f.fileInfo.pos += int64(len(data))
-	err = f.saveFileInfo(fileID)
-	if err != nil {
-	    log.Printf("can not save file info: %v", err)
-	}
         return data, nil
     }
     return nil, nil
 }
+
+// UpdatePosition is update file position
+func (f *FileReader)UpdatePosition(readLen int) {
+    if f.fileInfo == nil {
+        return
+    }
+    f.fileInfo.pos += int64(readLen)
+    err := f.saveFileInfo(f.fileInfo.fileID)
+    if err != nil {
+        log.Printf("can not save file info: %v", err)
+    }
+}
+
 
 // NewFileReader is create new file reader
 func NewFileReader(callers string, config *configurator.Config) (*FileReader) {
