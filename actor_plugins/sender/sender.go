@@ -101,7 +101,7 @@ func (s *Sender) fileCheckLoop() {
 		Path: fileName,
 		LogData: data,
 	}
-	conn, err := grpc.Dial("127.0.0.1:19003",  grpc.WithInsecure())
+	conn, err := grpc.Dial(s.config.AddrPort,  grpc.WithInsecure())
 	if err != nil {
             log.Printf("can not dial: %v", err)
             continue
