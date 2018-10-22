@@ -23,5 +23,5 @@ type LogMonitorConfig struct {
 type LogRecieverConfig struct {
     AddrPort string `json:"addr_port" yaml:"addr_port" toml:"addr_port"`
     Path string `json:"path" yaml:"path" toml:"path"` 
-    PathFormat string `json:"path_format" yaml:"path_format" toml:"path_format"` // default "${LABEL}/${HOST}_${ADDR}/${FILE_PATH}"
+    PathFormat string `json:"path_format" yaml:"path_format" toml:"path_format"`
 }

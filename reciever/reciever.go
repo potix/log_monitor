@@ -7,11 +7,13 @@ import (
     "google.golang.org/grpc"
     "google.golang.org/grpc/peer"
     "github.com/potix/log_monitor/configurator"
+    "github.com/potix/log_monitor/logstore"
     logpb "github.com/potix/log_monitor/logpb"
 )
 
 // Reciever is reciever
 type Reciever struct {
+    logstore *logstore.LogStore
     listen net.Listener
     server *grpc.Server
     config *configurator.LogRecieverConfig
@@ -32,7 +34,7 @@ func (r *Reciever) getRemoteAddr(ctx context.Context) (string) {
 // Transfer is transfer
 func (r *Reciever) Transfer(ctx context.Context, request *logpb.TransferRequest) (*logpb.TransferReply, error) {
      addr := r.getRemoteAddr(ctx)
-     err := logstore.Save(ctx, addr, request)
+     err := r.logstore.Save(ctx, addr, request)
      if err != nil {
         return &logpb.TransferReply{
             Success: false,
@@ -60,18 +62,19 @@ func (r *Reciever) Stop() {
 }
 
 // NewReciever is create new reciver
-func NewReciever(config *configurator.LogRecieverConfig) (error){
+func NewReciever(config *configurator.LogRecieverConfig) (*Reciever, error){
     listen, err := net.Listen("tcp", config.AddrPort)
     if err != nil {
-        return errors.Wrapf(err, "can not listen addr port (%v)", config.AddrPort)
+        return nil, errors.Wrapf(err, "can not listen addr port (%v)", config.AddrPort)
     }
     server := grpc.NewServer()
     reciever := &Reciever{
+        logstore: logstore.NewLogStore(config),
         listen: listen,
         server: server,
         config: config,
     }
     logpb.RegisterLogServer(server, reciever)
 
-    return nil
+    return reciever, nil
 }
