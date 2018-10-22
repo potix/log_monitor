@@ -198,16 +198,17 @@ func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, er
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
     }
     log.Printf("config = %v", config)
+    newCallers := callers + ".matcher"
     ruleManager, err := rulemanager.NewRuleManager(config, configurator)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create rule manager")
     }
-    fileChecker, err := filechecker.NewFileChecker(config)
+    fileChecker, err := filechecker.NewFileChecker(newCallers, config)
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create file checker")
     }
     return &Matcher {
-        callers: callers + ".matcher",
+        callers: newCallers,
         configurator: configurator,
         fileChecker: fileChecker,
         ruleManager: ruleManager,
