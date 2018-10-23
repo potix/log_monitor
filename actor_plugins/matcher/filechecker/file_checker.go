@@ -3,6 +3,7 @@ package filechecker
 import (
     "os"
     "log"
+    "regexp"
     "bufio"
     "path/filepath"
     "encoding/gob"
@@ -59,8 +60,8 @@ func (f *FileChecker)saveFileInfo(fileID string) (error) {
     return nil
 }
 
-// Check is checl
-func (f *FileChecker)Check(fileID string, trackLinkFile string) (error) {
+// Check is check
+func (f *FileChecker)Check(fileID string, trackLinkFile string, pathMatcher *configurator.PathMatcher) (error) {
     if f.fileInfo == nil {
         err := f.loadFileInfo(fileID)
         if err != nil {
@@ -80,23 +81,44 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string) (error) {
     if err != nil {
         return errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
     }
-    if fi.Size() > f.fileInfo.pos {
-	file, err := os.Open(trackLinkFile)
-	if err != nil {
-            return errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
-	}
-        defer file.Close()
-        reader := bufio.NewReader(file)
+    if fi.Size() <= f.fileInfo.pos {
+        return nil
+    }
+    oldPos := f.fileInfo.pos
+    file, err := os.Open(trackLinkFile)
+    if err != nil {
+        return errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
+    }
+    defer file.Close()
+    _, err = file.Seek(f.fileInfo.pos, 0)
+    if err != nil {
+        return errors.Wrapf(err, "can not seek trackLinkFile (%v)", trackLinkFile)
+    }
+    reader := bufio.NewReader(file)
+    for {
         data, err := reader.ReadBytes('\n')
         if err != nil {
-            return errors.Wrapf(err, "can not read trackLinkFile (%v)", trackLinkFile)
+            log.Printf("can not read bytes (%v:%v)", trackLinkFile, f.fileInfo.pos)
+            break
         }
-        // XXXX check
+        for _, matcher := range pathMatcher.MsgMatchers {
+            matched, err := regexp.Match(matcher.Pattern, data)
+            if err != nil {
+                log.Printf("can not macth message (%v, %v): %v", matcher.Pattern, string(data), err)
+            }
+            if matched {
+                // XXX TODO notify
+                log.Printf("Notify!! %v", string(data))
+            }
+        }
         f.fileInfo.pos += int64(len(data))
-        err := f.saveFileInfo(f.fileInfo.fileID)
-        if err != nil {
-            log.Printf("can not save file info: %v", err)
-        }
+    }
+    if oldPos == f.fileInfo.pos {
+        return nil
+    }
+    err = f.saveFileInfo(f.fileInfo.fileID)
+    if err != nil {
+        log.Printf("can not save file info: %v", err)
     }
     return nil
 }

@@ -98,12 +98,12 @@ func (m *Matcher) fileCheckLoop() {
         fileID := m.targetInfo.getFileID()
         fileName := m.targetInfo.getFileName()
         trackLinkFilePath := m.targetInfo.getTrackLinkFilePath()
-	rule := m.ruleManager.GetRule(fileName)
-        if rule == nil {
+	pathMatchers := m.ruleManager.GetRule(fileName)
+        if pathMatchers == nil {
             log.Printf("not found rule for target (%v)", fileName)
             continue
         }
-        err := m.fileChecker.Check(fileID, trackLinkFilePath, fileName, rule)
+        err := m.fileChecker.Check(fileID, trackLinkFilePath, pathMatchers)
         if err != nil {
             log.Printf("can not check file (%v:%v)", )
         }
@@ -116,8 +116,8 @@ func (m *Matcher) expireCheckLoop() {
         case <-time.After(1*time.Second):
             t := time.Now().Unix()
             if t >= m.expireCheckInfo.expire {
-                fileID := m.targetInfo.getFileID()
-                m.fileChecker.Flush(fileID)
+                //fileID := m.targetInfo.getFileID()
+                //m.fileChecker.Flush(fileID)
             }
         case <-m.expireCheckInfo.finish:
             return
@@ -126,8 +126,8 @@ func (m *Matcher) expireCheckLoop() {
 }
 
 func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath string) {
-    rule := m.ruleManager.GetRule(fileName)
-    if rule == nil {
+    pathMatchers := m.ruleManager.GetRule(fileName)
+    if pathMatchers == nil {
         log.Printf("not found rule for target (%v)", fileName)
         return
     }
@@ -143,7 +143,7 @@ func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath s
         finish: 0,
     }
     m.expireCheckInfo = &expireCheckInfo{
-        expire: rule.Expire + time.Now().Unix(),
+        expire: pathMatchers.Expire + time.Now().Unix(),
         finish: make(chan bool),
     }
     m.ruleManager.Start()
@@ -203,14 +203,10 @@ func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, er
     if (err != nil) {
         return nil, errors.Wrapf(err, "can not create rule manager")
     }
-    fileChecker, err := filechecker.NewFileChecker(newCallers, config)
-    if (err != nil) {
-        return nil, errors.Wrapf(err, "can not create file checker")
-    }
     return &Matcher {
         callers: newCallers,
         configurator: configurator,
-        fileChecker: fileChecker,
+        fileChecker: filechecker.NewFileChecker(newCallers, config),
         ruleManager: ruleManager,
         targetInfo: nil,
         fileCheckInfo: nil,
