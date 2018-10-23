@@ -3,6 +3,7 @@ package filereader
 import (
     "os"
     "log"
+    "bytes"
     "bufio"
     "path/filepath"
     "encoding/gob"
@@ -79,20 +80,38 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, error) {
     if err != nil {
         return nil, errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
     }
-    if fi.Size() > f.fileInfo.pos {
-	file, err := os.Open(trackLinkFile)
-	if err != nil {
-            return nil, errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
-	}
-        defer file.Close()
-        reader := bufio.NewReader(file)
-        data, err := reader.ReadBytes('\n')
-        if err != nil {
-            return nil, errors.Wrapf(err, "can not read trackLinkFile (%v)", trackLinkFile)
-        }
-        return data, nil
+    if fi.Size() <= f.fileInfo.pos {
+        return nil, nil
     }
-    return nil, nil
+
+    file, err := os.Open(trackLinkFile)
+    if err != nil {
+        return nil, errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
+    }
+    defer file.Close()
+    _, err = file.Seek(f.fileInfo.pos, 0)
+    if err != nil {
+        return nil, errors.Wrapf(err, "can not seek trackLinkFile (%v)", trackLinkFile)
+    }
+    data := make([]byte, 0, 8192)
+    dataBuffer := bytes.NewBuffer(data)
+    reader := bufio.NewReader(file)
+    for {
+        line, err := reader.ReadBytes('\n')
+        if err != nil {
+            log.Printf("can not read trackLinkFile (%v): %v", trackLinkFile, err)
+            // finish
+            break
+        }
+        _, err = dataBuffer.Write(line)
+        if err != nil {
+            log.Printf("can not read trackLinkFile (%v): %v", trackLinkFile, err)
+            return nil, errors.Wrap(err, "can not write to buffer")
+        }
+        
+    }
+    return dataBuffer.Bytes(), nil
+    
 }
 
 // UpdatePosition is update file position

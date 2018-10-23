@@ -15,7 +15,6 @@ type MsgMatcher struct {
 type PathMatcher struct {
     Pattern string
     MsgMatchers []*MsgMatcher
-    Expire int64
     Notifier string
     Mode string
 }

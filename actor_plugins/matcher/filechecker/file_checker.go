@@ -99,6 +99,7 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, pathMatcher *con
         data, err := reader.ReadBytes('\n')
         if err != nil {
             log.Printf("can not read bytes (%v:%v)", trackLinkFile, f.fileInfo.pos)
+            // finish
             break
         }
         for _, matcher := range pathMatcher.MsgMatchers {

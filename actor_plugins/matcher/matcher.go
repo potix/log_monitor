@@ -2,7 +2,6 @@ package main
 
 import (
     "log"
-    "time"
     "sync"
     "sync/atomic"
     "context"
@@ -62,19 +61,6 @@ func (f *fileCheckInfo) setFinish() {
     atomic.StoreUint32(&f.finish, 1)
 }
 
-type expireCheckInfo struct {
-    expire int64
-    finish chan bool
-}
-
-func (e *expireCheckInfo) getExpire() (int64) {
-    return atomic.LoadInt64(&e.expire)
-}
-
-func (e *expireCheckInfo) updateExpire(expire int64) {
-    atomic.StoreInt64(&e.expire, expire)
-}
-
 // Matcher is matcher
 type Matcher struct {
     callers string
@@ -83,7 +69,6 @@ type Matcher struct {
     fileChecker *filechecker.FileChecker
     targetInfo *targetInfo
     fileCheckInfo *fileCheckInfo
-    expireCheckInfo *expireCheckInfo
 }
 
 func (m *Matcher) fileCheckLoop() {
@@ -110,21 +95,6 @@ func (m *Matcher) fileCheckLoop() {
     }
 }
 
-func (m *Matcher) expireCheckLoop() {
-    for {
-        select {
-        case <-time.After(1*time.Second):
-            t := time.Now().Unix()
-            if t >= m.expireCheckInfo.expire {
-                //fileID := m.targetInfo.getFileID()
-                //m.fileChecker.Flush(fileID)
-            }
-        case <-m.expireCheckInfo.finish:
-            return
-        }
-    }
-}
-
 func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath string) {
     pathMatchers := m.ruleManager.GetRule(fileName)
     if pathMatchers == nil {
@@ -142,20 +112,14 @@ func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath s
         needCheck: 0,
         finish: 0,
     }
-    m.expireCheckInfo = &expireCheckInfo{
-        expire: pathMatchers.Expire + time.Now().Unix(),
-        finish: make(chan bool),
-    }
     m.ruleManager.Start()
     go m.fileCheckLoop()
-    go m.expireCheckLoop()
 }
 
 func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath string) {
     if m.targetInfo == nil {
         return
     }
-    close(m.expireCheckInfo.finish)
     m.fileCheckInfo.setFinish()
     m.fileCheckInfo.kickEvent.Release(1)
     m.ruleManager.Stop()
@@ -210,7 +174,6 @@ func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, er
         ruleManager: ruleManager,
         targetInfo: nil,
         fileCheckInfo: nil,
-        expireCheckInfo: nil,
     }, nil
 }
 
