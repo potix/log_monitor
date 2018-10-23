@@ -88,7 +88,7 @@ func (m *Matcher) fileCheckLoop() {
             log.Printf("not found rule for target (%v)", fileName)
             continue
         }
-        err := m.fileChecker.Check(fileID, trackLinkFilePath, pathMatchers)
+        err := m.fileChecker.Check(fileID, trackLinkFilePath, fileName, pathMatchers)
         if err != nil {
             log.Printf("can not check file (%v:%v)", )
         }

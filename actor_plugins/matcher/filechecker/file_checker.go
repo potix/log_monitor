@@ -61,7 +61,7 @@ func (f *FileChecker)saveFileInfo(fileID string) (error) {
 }
 
 // Check is check
-func (f *FileChecker)Check(fileID string, trackLinkFile string, pathMatcher *configurator.PathMatcher) (error) {
+func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string, pathMatcher *configurator.PathMatcher) (error) {
     if f.fileInfo == nil {
         err := f.loadFileInfo(fileID)
         if err != nil {
