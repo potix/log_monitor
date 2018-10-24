@@ -105,7 +105,7 @@ func (s *SMTPClient) SendMail(subject string, body string) (error) {
 			ServerName:         host,
 			InsecureSkipVerify: false,
 		}
-		if err := client.StartTLS(tlsconfig); err != nil {
+		if err = client.StartTLS(tlsconfig); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("can not start tls (host port = %v, use start tls = %v)", s.hostPort, s.useStartTLS))
 		}
 	}

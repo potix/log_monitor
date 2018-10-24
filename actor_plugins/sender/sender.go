@@ -90,9 +90,10 @@ func (s *Sender) fileCheckLoop() {
         }
         fileID := s.targetInfo.getFileID()
         fileName := s.targetInfo.getFileName()
-        data, err := s.fileReader.Read(fileID, s.targetInfo.getTrackLinkFile())
+	trackLinkFile := s.targetInfo.getTrackLinkFile()
+        data, err := s.fileReader.Read(fileID, trackLinkFile)
         if err != nil {
-            log.Printf("can not check file (%v): %v", err)
+            log.Printf("can not check file (%v, %v): %v", fileID, trackLinkFile, err)
             continue
         }
 	transferRequest := &logpb.TransferRequest {

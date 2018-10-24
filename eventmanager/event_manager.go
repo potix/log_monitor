@@ -77,7 +77,7 @@ func (e *EventManager) foundFile(name string, fileID string) (error) {
     trackLinkPath :=  path.Join(path.Dir(name), trackLinkPathName)
     _, err := os.Stat(trackLinkPath)
     if err != nil {
-        err := os.Mkdir(trackLinkPath, 0755)
+        err = os.Mkdir(trackLinkPath, 0755)
         if err != nil {
             return errors.Wrapf(err, "[foundFile] can not create track link path (%v)", trackLinkPath)
         }
@@ -116,7 +116,7 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
     trackLinkPath :=  path.Join(path.Dir(event.Name), trackLinkPathName)
     _, err := os.Stat(trackLinkPath)
     if err != nil {
-        err := os.Mkdir(trackLinkPath, 0755)
+        err = os.Mkdir(trackLinkPath, 0755)
         if err != nil {
             return errors.Wrapf(err, "[foundFile] can not create track link path (%v)", trackLinkPath)
         }
@@ -130,7 +130,7 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
     // create plugin
     actorPlugins, err := e.newActorPlugins(event.Name)
     if err != nil {
-	return errors.Wrapf(err, "[createdFile] can not create actor plugin (%v, %v): %v", fileID, event.Name)
+	return errors.Wrapf(err, "[createdFile] can not create actor plugin (%v, %v)", fileID, event.Name)
     }
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
