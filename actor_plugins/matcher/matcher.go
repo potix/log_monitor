@@ -93,7 +93,7 @@ func (m *Matcher) fileCheckLoop() {
         }
         err := m.fileChecker.Check(fileID, trackLinkFilePath, fileName, pathMatchers)
         if err != nil {
-	    log.Printf("can not check file (%v, %v, %v): %v", fileID, trackLinkFilePath, fileName)
+	    log.Printf("can not check file (%v, %v, %v): %v", fileID, trackLinkFilePath, fileName, err)
         }
     }
 }

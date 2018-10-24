@@ -1,5 +1,6 @@
 package configurator
 
+// Config is config
 type Config struct {
     AddrPort string `json:"addr_port" yaml:"addr_port" toml:"addr_port"`
     Label string `json:"label" yaml:"label" toml:"label"`
