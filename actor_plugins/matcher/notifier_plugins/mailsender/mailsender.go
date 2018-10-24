@@ -2,22 +2,33 @@ package main
 
 import (
     "log"
+    "strings"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actor_plugins/matcher/notifierplugger"
     "github.com/potix/log_monitor/actor_plugins/matcher/notifier_plugins/mailsender/utility"
     "github.com/potix/log_monitor/actor_plugins/matcher/notifier_plugins/mailsender/configurator"
 )
 
+const (
+	defaultSubjectFormat string = "${LABEL} - ${FILENAME}"
+)
+
+// MailSender is MailSender
 type MailSender struct {
         callers string
         config *configurator.Config
         smtpClient *utility.SMTPClient
 }
 
+// Notify is notify
 func (m *MailSender) Notify(msg []byte, fileID string, fileName string, label string) {
-        subject := "XXX"
-        body := "XXX"
-        err := m.smtpClient.SendMail(subject, body)
+	format := defaultSubjectFormat
+	if m.config.SubjectFormat != "" {
+	    format = m.config.SubjectFormat
+	}
+        r := strings.NewReplacer("${LABEL}", label, "${FILEID}", fileID, "${FILENAME}", fileName)
+        subject := r.Replace(format)
+        err := m.smtpClient.SendMail(subject, string(msg))
         if err != nil {
             log.Printf("can not send mail (%v, %v, %v, %v): err", m.config.From, m.config.To, m.config.HostPort, subject)
         }

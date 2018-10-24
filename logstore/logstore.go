@@ -12,7 +12,7 @@ import (
 )
 
 const (
-    DEFAULT_PATH_FORMAT string = "${LABEL}/${HOST}_${ADDR}/${FILE_PATH}"
+    defaultPathFormat string = "${LABEL}/${HOST}_${ADDR}/${FILE_PATH}"
 )
 
 // LogStore is LogStore
@@ -22,7 +22,7 @@ type LogStore struct {
 
 // Save is save
 func (l *LogStore)Save(ctx context.Context, addr string, request *logpb.TransferRequest) (error) {
-    format := DEFAULT_PATH_FORMAT
+    format := defaultPathFormat
     if l.config.PathFormat != "" {
         format = l.config.PathFormat
     } 
