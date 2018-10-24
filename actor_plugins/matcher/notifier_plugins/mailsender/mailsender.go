@@ -1,44 +1,52 @@
 package main
 
+import (
+    "log"
+    "github.com/pkg/errors"
+    "github.com/potix/log_monitor/actor_plugins/matcher/notifierplugger"
+    "github.com/potix/log_monitor/actor_plugins/matcher/notifier_plugins/mailsender/utility"
+    "github.com/potix/log_monitor/actor_plugins/matcher/notifier_plugins/mailsender/configurator"
+)
 
-package notifier
-
-import "github.com/AutomaticCoinTrader/ACT/utility"
-
-type Notifier struct {
+type MailSender struct {
+        callers string
+        config *configurator.Config
         smtpClient *utility.SMTPClient
 }
 
-func (n *Notifier) SendMail(subject string, body string) error {
-        if n.smtpClient == nil {
-                return nil
+func (m *MailSender) Notify(msg []byte, fileID string, fileName string, label string) {
+        subject := "XXX"
+        body := "XXX"
+        err := m.smtpClient.SendMail(subject, body)
+        if err != nil {
+            log.Printf("can not send mail (%v, %v, %v, %v): err", m.config.From, m.config.To, m.config.HostPort, subject)
         }
-        return n.smtpClient.SendMail(subject, body)
 }
 
-type MailNotifierConfig struct {
-        HostPort    string `json:"hostPort"    yaml:"hostPort"    toml:"hostPort"`
-        Username    string `json:"username"    yaml:"username"    toml:"username"`
-        Password    string `json:"password"    yaml:"password"    toml:"password"`
-        AuthType    string `json:"authType"    yaml:"authType"    toml:"authType"`
-        UseTLS      bool   `json:"useTls"      yaml:"useTls"      toml:"useTls"`
-        UseStartTLS bool   `json:"useStartTls" yaml:"useStartTls" toml:"useStartTls"`
-        From        string `json:"from"        yaml:"from"        toml:"from"`
-        To          string `json:"to"          yaml:"to"          toml:"to"`
+// NewMailSender is create new mail sender
+func NewMailSender(callers string, configFile string) (notifierplugger.NotifierPlugin, error) {
+    log.Printf("configFile = %v", configFile)
+    configurator, err := configurator.NewConfigurator(configFile)
+    if err != nil {
+        return nil, errors.Wrapf(err, "can not create configurator (%v)", configFile)
+    }
+    config, err := configurator.Load()
+    if err != nil {
+        return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
+    }
+    log.Printf("config = %v", config)
+    newCallers := callers + ".mailsender"
+    smtpClient := utility.NewSMTPClient(config.HostPort, config.Username,
+        config.Password, utility.GetSMTPAuthType(config.AuthType),
+        config.UseTLS, config.UseStartTLS, config.From, config.To)
+    return &MailSender {
+        callers: newCallers,
+        config: config,
+        smtpClient: smtpClient,
+    }, nil
 }
 
-type Config struct {
-        Mail  *MailNotifierConfig  `json:"mail" yaml:"mail" toml:"mail"`
-}
-
-func NewMailNotifier(config *Config) (*Notifier, error) {
-        var smtpClient *utility.SMTPClient
-        if config != nil {
-                smtpClient = utility.NewSMTPClient(config.Mail.HostPort, config.Mail.Username,
-                        config.Mail.Password, utility.GetSMTPAuthType(config.Mail.AuthType),
-                        config.Mail.UseTLS, config.Mail.UseStartTLS, config.Mail.From, config.Mail.To)
-        }
-        return &Notifier{
-                smtpClient: smtpClient,
-        }, nil
+// GetNotifierPluginInfo is GetNotifierPluginInfo
+func GetNotifierPluginInfo() (string, notifierplugger.NotifierPluginNewFunc) {
+    return "mailsender", NewMailSender
 }

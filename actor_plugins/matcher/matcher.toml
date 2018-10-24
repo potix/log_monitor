@@ -7,8 +7,8 @@ skip_notify="false"
   skip_notify="false"
   label="error log"
   [[notifires]]
-    name="mail"
-    config="mail.toml"
+    name="mailsender"
+    config="mailsender.toml"
   [[msg_matchers]]
     pattern="^.+error.+$"
 
