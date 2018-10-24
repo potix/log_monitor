@@ -5,12 +5,15 @@ import (
     "sync"
     "sync/atomic"
     "context"
+    "path"
+    "path/filepath"
     "golang.org/x/sync/semaphore"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
     "github.com/potix/log_monitor/actor_plugins/matcher/filechecker"
     "github.com/potix/log_monitor/actor_plugins/matcher/rulemanager"
+    "github.com/potix/log_monitor/actor_plugins/matcher/notifierplugger"
 )
 
 type targetInfo struct {
@@ -160,6 +163,11 @@ func NewMatcher(callers string, configFile string) (actorplugger.ActorPlugin, er
     config, err := configurator.Load()
     if err != nil {
         return nil, errors.Wrapf(err, "can not load config (%v)", configFile)
+    }
+    pluginPath := path.Join(filepath.Dir(configFile), config.NotifierPluginPath)
+    err = notifierplugger.LoadNotifierPlugins(pluginPath)
+    if err != nil {
+        log.Fatalf("can not load notifier plugins (%v): %v", pluginPath, err)
     }
     log.Printf("config = %v", config)
     newCallers := callers + ".matcher"

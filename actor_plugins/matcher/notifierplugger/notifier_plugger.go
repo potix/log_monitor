@@ -1,4 +1,4 @@
-package actorplugger
+package notifierplugger
 
 import (
     "plugin"
@@ -12,58 +12,58 @@ import (
 
 // NotifierPlugin is actor plugin
 type NotifierPlugin interface {
-    Notify(msg []byte, fileID string, fileName string)
+    Notify(msg []byte, fileID string, fileName string, label string)
 }
 
 const (
-   // GetActorPluginInfo is GetActorPluginInfo symbple
-   GetActorPluginInfo string = "GetActorPluginInfo"
+   // GetNotifierPluginInfo is GetNotifierPluginInfo symbple
+   GetNotifierPluginInfo string = "GetNotifierPluginInfo"
 )
 
-// ActorPluginNewFunc is ActorPluginNewFunc
-type ActorPluginNewFunc func(callers string, configFile string) (ActorPlugin, error)
+// NotifierPluginNewFunc is NotifierPluginNewFunc
+type NotifierPluginNewFunc func(callers string, configFile string) (NotifierPlugin, error)
 
-// GetActorPluginInfoFunc is GetActorPluginInfoFunc
-type GetActorPluginInfoFunc func() (string, ActorPluginNewFunc)
+// GetNotifierPluginInfoFunc is GetNotifierPluginInfoFunc
+type GetNotifierPluginInfoFunc func() (string, NotifierPluginNewFunc)
 
-type actorPluginInfo struct {
-     actorPluginFilePath string
-     actorPluginNewFunc ActorPluginNewFunc
+type notifierPluginInfo struct {
+     notifierPluginFilePath string
+     notifierPluginNewFunc NotifierPluginNewFunc
 }
 
-var registeredActorPlugins = make(map[string]*actorPluginInfo)
+var registeredNotifierPlugins = make(map[string]*notifierPluginInfo)
 
-func registerActorPlugin(pluginFilePath string,  getActorPluginInfoFunc GetActorPluginInfoFunc) {
-    name, actorPluginNewFunc := getActorPluginInfoFunc()	
-    registeredActorPlugins[name] = &actorPluginInfo {
-        actorPluginFilePath: pluginFilePath,
-        actorPluginNewFunc: actorPluginNewFunc,
+func registerNotifierPlugin(pluginFilePath string,  getNotifierPluginInfoFunc GetNotifierPluginInfoFunc) {
+    name, notifierPluginNewFunc := getNotifierPluginInfoFunc()	
+    registeredNotifierPlugins[name] = &notifierPluginInfo {
+        notifierPluginFilePath: pluginFilePath,
+        notifierPluginNewFunc: notifierPluginNewFunc,
     }
 }
 
-func getActorPluginSymbole(openedPlugin *plugin.Plugin) (GetActorPluginInfoFunc, error) {
-    s, err := openedPlugin.Lookup(GetActorPluginInfo)
+func getNotifierPluginSymbole(openedPlugin *plugin.Plugin) (GetNotifierPluginInfoFunc, error) {
+    s, err := openedPlugin.Lookup(GetNotifierPluginInfo)
     if err != nil {
         return nil, errors.Wrap(err, "not found GetPluginInfoFunc symbole")
     }
-    //return s.(GetActorPluginInfoFunc), nil
-    return s.(func() (string, ActorPluginNewFunc)), nil
+    //return s.(GetNotifierPluginInfoFunc), nil
+    return s.(func() (string, NotifierPluginNewFunc)), nil
 }
 
-func loadActorPlugin(pluginFilePath string) (error) {
+func loadNotifierPlugin(pluginFilePath string) (error) {
     openedPlugin, err := plugin.Open(pluginFilePath)
     if err != nil {
 	return errors.Wrapf(err, "can not open plugin file (file = %v)", pluginFilePath)
     }
-    f, err := getActorPluginSymbole(openedPlugin)
+    f, err := getNotifierPluginSymbole(openedPlugin)
     if err != nil {
 	return errors.Wrapf(err, "not plugin file (file = %v)", pluginFilePath)
     }
-    registerActorPlugin(pluginFilePath, f)
+    registerNotifierPlugin(pluginFilePath, f)
     return nil
 }
 
-func fixupActorPluginPath(pluginPath string) (string) {
+func fixupNotifierPluginPath(pluginPath string) (string) {
     u, err := user.Current()
     if err != nil {
         return pluginPath
@@ -72,11 +72,11 @@ func fixupActorPluginPath(pluginPath string) (string) {
     return re.ReplaceAllString(pluginPath, u.HomeDir+"/")
 }
 
-func loadActorPluginFiles(pluginPath string) (error) {
+func loadNotifierPluginFiles(pluginPath string) (error) {
     if pluginPath == "" {
         return errors.New("invalid plugin path")
     }
-    pluginPath = fixupActorPluginPath(pluginPath)
+    pluginPath = fixupNotifierPluginPath(pluginPath)
     fileList, err := ioutil.ReadDir(pluginPath)
     if err != nil {
         return errors.Wrapf(err, "can not read directory (path = %v)", pluginPath)
@@ -84,7 +84,7 @@ func loadActorPluginFiles(pluginPath string) (error) {
     for _, file := range fileList {
         newPath := filepath.Join(pluginPath, file.Name())
         if file.IsDir() {
-            err := loadActorPluginFiles(newPath)
+            err := loadNotifierPluginFiles(newPath)
             if err != nil {
                 log.Printf("can not load plugin files (%v): %v", newPath, err)
             }
@@ -94,7 +94,7 @@ func loadActorPluginFiles(pluginPath string) (error) {
 	if ext != ".so" && ext != ".dylib" {
 	    continue
 	}
-	err := loadActorPlugin(newPath)
+	err := loadNotifierPlugin(newPath)
 	if err != nil {
 	    log.Printf("can not load plugin file (%v): %v", newPath, err)
 	    continue
@@ -103,14 +103,14 @@ func loadActorPluginFiles(pluginPath string) (error) {
     return nil
 }
 
-// LoadActorPlugins is load actor Plugins
-func LoadActorPlugins(pluginPath string) (error) {
-	return loadActorPluginFiles(pluginPath)
+// LoadNotifierPlugins is load actor Plugins
+func LoadNotifierPlugins(pluginPath string) (error) {
+	return loadNotifierPluginFiles(pluginPath)
 }
 
-// GetActorPlugin is get actor plugin
-func GetActorPlugin(name string) (string, ActorPluginNewFunc, bool) {
-        info, ok := registeredActorPlugins[name]
-        return info.actorPluginFilePath, info.actorPluginNewFunc, ok
+// GetNotifierPlugin is get actor plugin
+func GetNotifierPlugin(name string) (string, NotifierPluginNewFunc, bool) {
+        info, ok := registeredNotifierPlugins[name]
+        return info.notifierPluginFilePath, info.notifierPluginNewFunc, ok
 }
 

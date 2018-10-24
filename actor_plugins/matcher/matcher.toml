@@ -1,16 +1,14 @@
 auto_reload = 5
-
-[notifiers]
-
-  [notifiers.my_mail]
-  name="mail"
-  config="mail.toml"
+notifier_plugin_path = "notifier_plugins"
+skip_notify="false"
 
 [[file_matchers]]
-    pattern="^.+message.+$"
-    expire=172800
-    notifire="my_mail"
-    mode="normal"
-    [[msg_matchers]]
-        pattern="^.+ error.+$"
+  pattern="^.+messages.+$"
+  skip_notify="false"
+  label="error log"
+  [[notifires]]
+    name="mail"
+    config="mail.toml"
+  [[msg_matchers]]
+    pattern="^.+error.+$"
 

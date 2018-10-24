@@ -5,10 +5,12 @@ import (
     "log"
     "regexp"
     "bufio"
+    "path"
     "path/filepath"
     "encoding/gob"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
+    "github.com/potix/log_monitor/actor_plugins/matcher/notifierplugger"
 )
 
 type fileInfo struct {
@@ -56,6 +58,26 @@ func (f *FileChecker)saveFileInfo(fileID string) (error) {
     err = enc.Encode(f.fileInfo)
     if err != nil {
         errors.Wrapf(err, "can not encode file info (%v)", infoFilePath)
+    }
+    return nil
+}
+
+func (f *FileChecker)callNotify(data []byte, fileID string, fileName string, pathMatcher *configurator.PathMatcher) (error) {
+    notifierPlugins := make([]notifierplugger.NotifierPlugin, 0, len(pathMatcher.Notifiers))
+    for _, notifier := range pathMatcher.Notifiers {
+        pluginFilePath, pluginNewFunc, ok := notifierplugger.GetNotifierPlugin(notifier.Name)
+        if !ok {
+            return errors.Errorf("not found notifier plugin (%v)", notifier.Name)
+        }
+        configPath := path.Join(filepath.Dir(pluginFilePath), notifier.Config)
+        plugin, err := pluginNewFunc(f.callers, configPath)
+        if err != nil {
+            return errors.Wrapf(err, "can not create plugin (%v, %v)",  notifier.Name, configPath )
+        }
+        notifierPlugins = append(notifierPlugins, plugin)
+    }
+    for _, notifierPlugin := range notifierPlugins {
+        notifierPlugin.Notify(data, fileID, fileName, pathMatcher.Label)
     }
     return nil
 }
@@ -108,8 +130,13 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
                 log.Printf("can not macth message (%v, %v): %v", matcher.Pattern, string(data), err)
             }
             if matched {
-                // XXX TODO notify
-                log.Printf("Notify!! %v", string(data))
+                log.Printf("matched (%v %v, %v)", fileName, matcher.Pattern, string(data))
+                if !f.config.SkipNotify && !pathMatcher.SkipNotify {
+                    err := f.callNotify(data, fileID, fileName, pathMatcher)
+                    if err != nil {
+                        log.Printf("can not notify (%v, %v): %v", matcher.Pattern, string(data), err)
+                    }
+                }
             }
         }
         f.fileInfo.pos += int64(len(data))
