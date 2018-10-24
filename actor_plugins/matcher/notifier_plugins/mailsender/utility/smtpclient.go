@@ -12,17 +12,22 @@ import (
 )
 
 const (
+	// SMTPAuthUnkown is SMTPAuthUnkown
 	SMTPAuthUnkown  SMTPAuthType = ""
+	// SMTPAuthPLAIN is SMTPAuthUnkown
 	SMTPAuthPLAIN   SMTPAuthType = "PLAIN"
+	// AMTPAuthCRAMMD5 is SMTPAuthUnkown
 	AMTPAuthCRAMMD5 SMTPAuthType = "CRAM-MD5"
 )
 
+// SMTPAuthType is SMTPAuthType
 type SMTPAuthType string
 
 func (s SMTPAuthType) String() (string) {
 	return string(s)
 }
 
+// GetSMTPAuthType is get GetSMTPAuthType
 func GetSMTPAuthType(authType string) (SMTPAuthType) {
 	switch strings.ToUpper(authType) {
 	case SMTPAuthPLAIN.String():
@@ -46,6 +51,7 @@ type SMTPClient struct {
 	to          string
 }
 
+// SendMail is send mail
 func (s *SMTPClient) SendMail(subject string, body string) (error) {
 	from := mail.Address{
 		Address: s.from,
@@ -62,7 +68,7 @@ func (s *SMTPClient) SendMail(subject string, body string) (error) {
 
 	host, _, _ := net.SplitHostPort(s.hostPort)
 
-	var auth smtp.Auth = nil
+	var auth smtp.Auth
 	if s.username != "" {
 		if s.authType == SMTPAuthPLAIN {
 			auth = smtp.PlainAuth("", s.username, s.password, host)

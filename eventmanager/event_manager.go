@@ -18,7 +18,7 @@ import (
 )
 
 const (
-    TRACK_LINK_PATH string = ".__track_link__"
+    trackLinkPathName string = ".__track_link__"
 )
 
 type pathInfo struct {
@@ -74,7 +74,7 @@ func (e *EventManager) newActorPlugins(path string) ([]actorplugger.ActorPlugin,
 
 func (e *EventManager) foundFile(name string, fileID string) (error) {
     // create track link path
-    trackLinkPath :=  path.Join(path.Dir(name), TRACK_LINK_PATH)
+    trackLinkPath :=  path.Join(path.Dir(name), trackLinkPathName)
     _, err := os.Stat(trackLinkPath)
     if err != nil {
         err := os.Mkdir(trackLinkPath, 0755)
@@ -113,7 +113,7 @@ func (e *EventManager) foundFile(name string, fileID string) (error) {
 
 func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) {
     // create track link path
-    trackLinkPath :=  path.Join(path.Dir(event.Name), TRACK_LINK_PATH)
+    trackLinkPath :=  path.Join(path.Dir(event.Name), trackLinkPathName)
     _, err := os.Stat(trackLinkPath)
     if err != nil {
         err := os.Mkdir(trackLinkPath, 0755)
@@ -194,7 +194,7 @@ func (e *EventManager) removedFile(event fsnotify.Event) (bool) {
     }
     status.mutex.Lock()
     defer status.mutex.Unlock()
-    trackLinkPath :=  path.Join(path.Dir(event.Name), TRACK_LINK_PATH)
+    trackLinkPath :=  path.Join(path.Dir(event.Name), trackLinkPathName)
     trackLinkFilePath :=  path.Join(trackLinkPath, status.fileID)
     for _, actorPlugin := range status.actorPlugins {
         actorPlugin.RemovedFile(event.Name, status.fileID, trackLinkFilePath)
@@ -290,7 +290,7 @@ func (e *EventManager) eventLoop() {
                    break
                }
                if info.IsDir() {
-                   if path.Base(event.Name) != TRACK_LINK_PATH {
+                   if path.Base(event.Name) != trackLinkPathName {
                        parent := filepath.Dir(event.Name)
                        info, ok := e.paths[parent]
                        if !ok {
@@ -347,7 +347,7 @@ func (e *EventManager) eventLoop() {
 }
 
 func (e *EventManager) addPath(path string, actors []*configurator.Actor) (error) {
-        trackLinkPath := filepath.Join(path, TRACK_LINK_PATH)
+        trackLinkPath := filepath.Join(path, trackLinkPathName)
         err := os.Mkdir(trackLinkPath, 0755)
         if err != nil {
             return errors.Wrapf(err, "can not create track link path (%v)", trackLinkPath)
@@ -362,10 +362,9 @@ func (e *EventManager) addPath(path string, actors []*configurator.Actor) (error
         err = e.watcher.Add(path)
         if err != nil {
             return errors.Wrap(err, "can not add path to watcher")
-	} else {
-            e.paths[path] = &pathInfo{
-                actors: actors,
-            }
+	}
+        e.paths[path] = &pathInfo{
+             actors: actors,
         }
         log.Printf("[addPath] add path (%v)", path)
         return nil
@@ -382,9 +381,8 @@ func (e *EventManager) deletePath(path string) (error) {
         err := e.watcher.Remove(path)
         if err != nil {
             return errors.Wrap(err, "can not delete path from watcher")
-	} else {
-            delete(e.paths, path)
-        }
+	}
+        delete(e.paths, path)
         log.Printf("[deletePath] delete path (%v)", path)
         return nil
 }
@@ -436,7 +434,7 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
 }
 
 func (e *EventManager) addTargets(targetPath string, actors []*configurator.Actor) {
-    if path.Base(targetPath) == TRACK_LINK_PATH {
+    if path.Base(targetPath) == trackLinkPathName {
         // skip track link path
         return
     }
