@@ -44,7 +44,7 @@ func registerNotifierPlugin(pluginFilePath string,  getNotifierPluginInfoFunc Ge
 func getNotifierPluginSymbole(openedPlugin *plugin.Plugin) (GetNotifierPluginInfoFunc, error) {
     s, err := openedPlugin.Lookup(GetNotifierPluginInfo)
     if err != nil {
-        return nil, errors.Wrap(err, "not found GetPluginInfoFunc symbole")
+        return nil, errors.Wrapf(err, "not found %v symbole", GetNotifierPluginInfo)
     }
     //return s.(GetNotifierPluginInfoFunc), nil
     return s.(func() (string, NotifierPluginNewFunc)), nil

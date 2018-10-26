@@ -349,10 +349,13 @@ func (e *EventManager) eventLoop() {
 
 func (e *EventManager) addPath(path string, pattern string, actors []*configurator.Actor) (error) {
         trackLinkPath := filepath.Join(path, trackLinkPathName)
-        err := os.Mkdir(trackLinkPath, 0755)
+        _, err := os.Stat(trackLinkPath)
         if err != nil {
-            return errors.Wrapf(err, "can not create track link path (%v)", trackLinkPath)
-        } 
+            err := os.Mkdir(trackLinkPath, 0755)
+            if err != nil {
+                return errors.Wrapf(err, "can not create track link path (%v)", trackLinkPath)
+            } 
+        }
 	e.pathsMutex.Lock()
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
@@ -460,7 +463,7 @@ func (e *EventManager) addTargets(targetPath string, pattern string, actors []*c
             e.addTargets(newPath, pattern, actors)
 	    continue
         }
-        matched, err := regexp.Match(pattern, []byte(newPath))
+        matched, err := regexp.MatchString(pattern, newPath)
         if err != nil {    
             log.Printf("[addTargets] can not target file matching (%v, %v)", pattern, newPath)
             continue

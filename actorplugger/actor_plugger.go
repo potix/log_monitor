@@ -48,7 +48,7 @@ func registerActorPlugin(pluginFilePath string,  getActorPluginInfoFunc GetActor
 func getActorPluginSymbole(openedPlugin *plugin.Plugin) (GetActorPluginInfoFunc, error) {
     s, err := openedPlugin.Lookup(GetActorPluginInfo)
     if err != nil {
-        return nil, errors.Wrap(err, "not found GetPluginInfoFunc symbole")
+        return nil, errors.Wrapf(err, "not found %v symbole", GetActorPluginInfo)
     }
     //return s.(GetActorPluginInfoFunc), nil
     return s.(func() (string, ActorPluginNewFunc)), nil
