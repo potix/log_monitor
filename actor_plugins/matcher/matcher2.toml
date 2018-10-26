@@ -3,7 +3,7 @@ notifier_plugin_path = "notifier_plugins"
 skip_notify=false
 
 [[ path_matchers ]]
-  pattern="^.+messages.+$"
+  pattern="^.+(messages|syslog).+$"
   skip_notify=false
   label="matcher 2"
   [[ path_matchers.notifires ]]

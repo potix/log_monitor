@@ -79,6 +79,7 @@ func (m *Matcher) fileCheckLoop() {
 }
 
 func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath string) {
+log.Printf("initialize")
     pathMatchers := m.ruleManager.GetRule(fileName)
     if pathMatchers == nil {
         log.Printf("not found rule for target (%v)", fileName)
@@ -98,9 +99,6 @@ func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath s
 }
 
 func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath string) {
-    if m.targetInfo == nil {
-        return
-    }
     close(m.fileCheckInfo.eventCh)
     m.ruleManager.Stop()
 }
@@ -117,16 +115,25 @@ func (m *Matcher) CreatedFile(fileName string, fileID string, trackLinkFilePath 
 
 // RemovedFile is remove file
 func (m *Matcher) RemovedFile(fileName string, fileID string, trackLinkFilePath string) {
+    if m.targetInfo == nil {
+        return
+    }
     m.finalize(fileName, fileID, trackLinkFilePath)
 }
 
 // RenamedFile is rename file
 func (m *Matcher) RenamedFile(oldFileName string, newFileName string, fileID string) {
-   m.targetInfo.setFileName(newFileName)
+    if m.targetInfo == nil {
+        return
+    }
+    m.targetInfo.setFileName(newFileName)
 }
 
 // ModifiedFile is modify file
 func (m *Matcher) ModifiedFile(fileName string, fileID string) {
+    if m.targetInfo == nil {
+        return
+    }
     m.fileCheckInfo.eventCh <- true
 }
 

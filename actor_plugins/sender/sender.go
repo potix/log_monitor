@@ -64,6 +64,8 @@ type Sender struct {
    hostname string
 }
 
+
+
 func (s *Sender) fileCheckLoop() {
     for {
         select {
@@ -76,6 +78,13 @@ func (s *Sender) fileCheckLoop() {
         fileID := s.targetInfo.getFileID()
         fileName := s.targetInfo.getFileName()
 	trackLinkFile := s.targetInfo.getTrackLinkFile()
+	conn, err := grpc.Dial(s.config.AddrPort,  grpc.WithInsecure())
+	if err != nil {
+            log.Printf("can not dial: %v", err)
+            continue
+	}
+	client := logpb.NewLogClient(conn)
+        defer conn.Close()
 again:
         data, eof, err := s.fileReader.Read(fileID, trackLinkFile)
         if err != nil {
@@ -88,12 +97,6 @@ again:
 		Path: fileName,
 		LogData: data,
 	}
-	conn, err := grpc.Dial(s.config.AddrPort,  grpc.WithInsecure())
-	if err != nil {
-            log.Printf("can not dial: %v", err)
-            continue
-	}
-	client := logpb.NewLogClient(conn)
 	transferReply, err := client.Transfer(context.Background(), transferRequest)
 	if err != nil {
             log.Printf("can not recieve reply : %v", err)
@@ -107,6 +110,7 @@ again:
         if !eof {
             goto again
         }
+
     }
 }
 
