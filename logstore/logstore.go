@@ -26,7 +26,7 @@ func (l *LogStore)Save(ctx context.Context, addr string, request *logpb.Transfer
     if l.config.PathFormat != "" {
         format = l.config.PathFormat
     } 
-    r := strings.NewReplacer("${LABEL}", request.Label, "${HOST}", request.Host, "${Addr}", addr, "${FILE_PATH}", request.Path)
+    r := strings.NewReplacer("${LABEL}", request.Label, "${HOST}", request.Host, "${ADDR}", addr, "${FILE_PATH}", request.Path)
     formatPath := r.Replace(format)
     filePath := filepath.Join(l.config.Path, formatPath)
     err := os.MkdirAll(path.Dir(filePath), 0755)
