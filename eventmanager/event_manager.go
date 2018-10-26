@@ -22,6 +22,7 @@ const (
 )
 
 type pathInfo struct {
+    pattern string
     actors []*configurator.Actor
 }
 
@@ -292,11 +293,11 @@ func (e *EventManager) eventLoop() {
                if info.IsDir() {
                    if path.Base(event.Name) != trackLinkPathName {
                        parent := filepath.Dir(event.Name)
-                       info, ok := e.paths[parent]
+                       pathInfo, ok := e.paths[parent]
                        if !ok {
                            log.Printf("[event Loop] not found parent %v", parent) 
                        } else {
-                           e.addPath(event.Name, info.actors)
+                           e.addPath(event.Name, pathInfo.pattern, pathInfo.actors)
                        }
                    }
                } else {
@@ -346,7 +347,7 @@ func (e *EventManager) eventLoop() {
     }
 }
 
-func (e *EventManager) addPath(path string, actors []*configurator.Actor) (error) {
+func (e *EventManager) addPath(path string, pattern string, actors []*configurator.Actor) (error) {
         trackLinkPath := filepath.Join(path, trackLinkPathName)
         err := os.Mkdir(trackLinkPath, 0755)
         if err != nil {
@@ -364,6 +365,7 @@ func (e *EventManager) addPath(path string, actors []*configurator.Actor) (error
             return errors.Wrap(err, "can not add path to watcher")
 	}
         e.paths[path] = &pathInfo{
+             pattern: pattern,
              actors: actors,
         }
         log.Printf("[addPath] add path (%v)", path)
@@ -433,7 +435,7 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
     return re.ReplaceAllString(targetPath, u.HomeDir+"/")
 }
 
-func (e *EventManager) addTargets(targetPath string, actors []*configurator.Actor) {
+func (e *EventManager) addTargets(targetPath string, pattern string, actors []*configurator.Actor) {
     if path.Base(targetPath) == trackLinkPathName {
         // skip track link path
         return
@@ -444,7 +446,7 @@ func (e *EventManager) addTargets(targetPath string, actors []*configurator.Acto
         log.Printf("[addTargets] can not read dir (%v): %v", targetPath, err)
         return
     }
-    err = e.addPath(targetPath, actors)
+    err = e.addPath(targetPath, pattern, actors)
     if err != nil {
         log.Printf("[addTargets] can not add path (%v): %v", targetPath, err)
         return
@@ -455,8 +457,16 @@ func (e *EventManager) addTargets(targetPath string, actors []*configurator.Acto
             newPath = "." + "/" + newPath
         }
         if file.IsDir() {
-            e.addTargets(newPath, actors)
+            e.addTargets(newPath, pattern, actors)
 	    continue
+        }
+        matched, err := regexp.Match(pattern, []byte(newPath))
+        if err != nil {    
+            log.Printf("[addTargets] can not target file matching (%v, %v)", pattern, newPath)
+            continue
+        }
+        if !matched {
+            continue
         }
 	fileID, _, err := e.getFileInfo(newPath)
         if err != nil {
@@ -492,7 +502,7 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
         renameFilesMutex : new(sync.Mutex),
     }
     for _, targetInfo := range config.Targets {
-         eventManager.addTargets(targetInfo.Path, targetInfo.Actors)
+         eventManager.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors)
     }
     return eventManager, nil
 }

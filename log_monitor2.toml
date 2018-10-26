@@ -4,10 +4,8 @@ actor_name = "matcher"
 actor_config = "matcher.toml"
 [targets]
   [targets.var_log]
-  path = "."
-  [[ actors ]]
-  name = "sender"
-  config = "sender.toml"
+  path = "/tmp/var"
+  pattern = "^.+(?!lastlog)(?=(messages|cron|secure|dmesg|spooler|log))$"
   [[ actors ]]
   name = "matcher"
   config = "matcher.toml"

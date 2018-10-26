@@ -5,10 +5,12 @@ skip_notify="false"
 [[file_matchers]]
   pattern="^.+messages.+$"
   skip_notify="false"
-  label="error log"
+  label="matcher 1"
   [[notifires]]
     name="mailsender"
     config="mailsender.toml"
   [[msg_matchers]]
-    pattern="^.+error.+$"
+    pattern="^.+[eE][rR][rR].+$"
+  [[msg_matchers]]
+    pattern="^.+[wW][aA][rR][nN].+$"
 

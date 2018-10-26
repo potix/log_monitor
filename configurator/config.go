@@ -9,6 +9,7 @@ type Actor struct {
 // Target is target
 type Target struct {
     Path string `json:"path" yaml:"path" toml:"path"`
+    Pattern string `json:"pattern" yaml:"pattern" toml:"pattern"`
     Actors []*Actor `json:"actors" yaml:"actors" toml:"actors"`
 }
 
