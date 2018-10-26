@@ -57,6 +57,7 @@ func (e *EventManager) newActorPlugins(path string) ([]actorplugger.ActorPlugin,
         return nil, errors.Errorf("not found parent path info (%v, %v)", path, parentDir)
     }
     newPlugins := make([]actorplugger.ActorPlugin, 0, len(parentPathInfo.actors))
+log.Printf("actors = %v", parentPathInfo.actors)
     for _, actor := range parentPathInfo.actors {
         actorPluginFilePath, actorPluginNewFunc, ok := actorplugger.GetActorPlugin(actor.Name)
         if !ok {
@@ -70,6 +71,7 @@ func (e *EventManager) newActorPlugins(path string) ([]actorplugger.ActorPlugin,
         }
         newPlugins = append(newPlugins, newActorPlugin)
     }
+log.Printf("%v", newPlugins)
     return newPlugins, nil
 }
 
@@ -269,7 +271,9 @@ func (e *EventManager) modifiedFile(event fsnotify.Event) {
         log.Printf("[modifiedFile] not dirty  (%v, %v)", event.Name, status.fileID)
         return
     }
+log.Printf("%v\n", len(status.actorPlugins))
     for _, actorPlugin := range status.actorPlugins {
+log.Printf("%%%%\n")
         actorPlugin.ModifiedFile(event.Name, status.fileID)
     }
     status.dirty = false

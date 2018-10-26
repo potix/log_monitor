@@ -81,13 +81,16 @@ type Sender struct {
 
 func (s *Sender) fileCheckLoop() {
     for {
+        log.Printf("XXX0")
         s.fileCheckInfo.kickEvent.Acquire(context.Background(), 1)
         if s.fileCheckInfo.getFinish() {
             return
         }
+        log.Printf("XXX1")
         if !s.fileCheckInfo.getNeedCheck() {
             return
         }
+        log.Printf("XXX2")
         fileID := s.targetInfo.getFileID()
         fileName := s.targetInfo.getFileName()
 	trackLinkFile := s.targetInfo.getTrackLinkFile()
@@ -186,7 +189,9 @@ func (s *Sender) RenamedFile(oldFileName string, newFileName string, fileID stri
 func (s *Sender) ModifiedFile(fileName string, fileID string) {
     s.fileCheckInfo.setNeedCheck()
     if s.config.FlushInterval == 0 {
+        log.Printf("YYY1")
         s.fileCheckInfo.kickEvent.Release(1)
+        log.Printf("YYY2")
     }
 }
 

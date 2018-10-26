@@ -1,14 +1,11 @@
 work_dir = "."
 actor_plugin_path = "actor_plugins"
-actor_name = "matcher"
-actor_config = "matcher1.toml"
-[targets]
-  [targets.var_log]
+[[ targets ]]
   path = "/var/log"
   pattern = "^.*(messages|cron|secure|dmesg|spooler|syslog|firewalld|tallylog|\\.log)$"
-  [[ actors ]]
+  [[ targets.actors ]]
   name = "sender"
   config = "sender.toml"
-  [[ actors ]]
+  [[ targets.actors ]]
   name = "matcher"
-  config = "matcher.toml"
+  config = "matcher1.toml"

@@ -17,7 +17,7 @@ type Target struct {
 type LogMonitorConfig struct {
     WorkDir string `json:"work_dir" yaml:"work_dr" toml:"work_dir"`  
     ActorPluginPath string `json:"actor_plugin_path" yaml:"actor_plugin_path" toml:"actor_plugin_path"`  
-    Targets map[string]*Target `json:"targets" yaml:"targets" toml:"targets"`  
+    Targets []*Target `json:"targets" yaml:"targets" toml:"targets"`  
 }
 
 // LogRecieverConfig is config of log reciever
