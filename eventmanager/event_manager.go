@@ -85,9 +85,12 @@ func (e *EventManager) foundFile(name string, fileID string) (error) {
     }
     // create track link
     trackLinkFilePath :=  path.Join(trackLinkPath, fileID)
-    err = os.Link(name, trackLinkFilePath)
+    _, err = os.Stat(trackLinkFilePath)
     if err != nil {
-        return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
+        err = os.Link(name, trackLinkFilePath)
+        if err != nil {
+            return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
+        }
     }
     // create plugin
     actorPlugins, err := e.newActorPlugins(name)
@@ -124,9 +127,12 @@ func (e *EventManager) createdFile(event fsnotify.Event, fileID string) (error) 
     }
     // create track link
     trackLinkFilePath :=  path.Join(trackLinkPath, fileID)
-    err = os.Link(event.Name, trackLinkFilePath)
+    _, err = os.Stat(trackLinkFilePath)
     if err != nil {
-        return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
+        err = os.Link(event.Name, trackLinkFilePath)
+        if err != nil {
+            return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
+        }
     }
     // create plugin
     actorPlugins, err := e.newActorPlugins(event.Name)
@@ -285,23 +291,32 @@ func (e *EventManager) eventLoop() {
                 break
             }
             fileID, info, getFileInfoErr := e.getFileInfo(event.Name)
+            parent := filepath.Dir(event.Name)
+            pathInfo, ok := e.paths[parent]
+            if !ok {
+                log.Printf("[event Loop] not found parent %v", parent)
+                break 
+            }
             if event.Op&fsnotify.Create == fsnotify.Create {
                if getFileInfoErr != nil {
                    log.Printf("[event Loop] can not get file info (%v)", event.Name)
                    break
                }
                if info.IsDir() {
-                   if path.Base(event.Name) != trackLinkPathName {
-                       parent := filepath.Dir(event.Name)
-                       pathInfo, ok := e.paths[parent]
-                       if !ok {
-                           log.Printf("[event Loop] not found parent %v", parent) 
-                       } else {
-                           e.addPath(event.Name, pathInfo.pattern, pathInfo.actors)
-                       }
+                   if path.Base(event.Name) == trackLinkPathName {
+                      break
                    }
+                   e.addPath(event.Name, pathInfo.pattern, pathInfo.actors)
                } else {
-                   err := e.createdFile(event, fileID)
+                   matched, err := regexp.MatchString(pathInfo.pattern, event.Name)
+                   if err != nil {
+                       log.Printf("[addTargets] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
+                       break
+                   }
+                   if !matched {
+                       break
+                   }
+                   err = e.createdFile(event, fileID)
                    if err !=nil {
                       log.Printf("[event.Loop] can not add target file (%v): %v", event.Name, err) 
                    }
@@ -324,18 +339,36 @@ func (e *EventManager) eventLoop() {
                    log.Printf("[event.Loop] can not get file info (%v)", event.Name)
                    break
                }
-               if !info.IsDir() {
-                   e.setDirtyFile(event, fileID)
+               if info.IsDir() {
+                   break
                }
+               matched, err := regexp.MatchString(pathInfo.pattern, event.Name)
+               if err != nil {
+                   log.Printf("[addTargets] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
+                   break
+               }
+               if !matched {
+                   break
+               }
+               e.setDirtyFile(event, fileID)
             }
             if event.Op&fsnotify.Remove != fsnotify.Remove && event.Op&fsnotify.Rename != fsnotify.Rename {
                if getFileInfoErr != nil {
                    log.Printf("[event.Loop] can not get file info (%v)", event.Name)
                    break
                }
-               if !info.IsDir() {
-                   e.modifiedFile(event)
+               if info.IsDir() {
+                   break
                }
+               matched, err := regexp.MatchString(pathInfo.pattern, event.Name)
+               if err != nil {
+                   log.Printf("[addTargets] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
+                   break
+               }
+               if !matched {
+                   break
+               }
+               e.modifiedFile(event)
             }
         case err, ok := <-e.watcher.Errors:
             if !ok {
@@ -476,7 +509,7 @@ func (e *EventManager) addTargets(targetPath string, pattern string, actors []*c
             log.Printf("[addTargets] can not get file info (%v)", newPath)
             continue
         }
-	err = e.foundFile(fileID, newPath)
+	err = e.foundFile(newPath, fileID)
         if err != nil {
             log.Printf("[addTargets] can not add target file (%v): %v", newPath, err)
             continue
