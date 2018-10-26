@@ -8,7 +8,6 @@ import (
     "sync/atomic"
     "context"
     "google.golang.org/grpc"
-    "golang.org/x/sync/semaphore"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/sender/filereader"
@@ -43,9 +42,8 @@ func (t *targetInfo) getTrackLinkFile() (string) {
 }
 
 type fileCheckInfo struct {
-    kickEvent *semaphore.Weighted
+    eventCh chan bool
     needCheck uint32
-    finish  uint32
 }
 
 func (f *fileCheckInfo) getNeedCheck() bool {
@@ -56,41 +54,25 @@ func (f *fileCheckInfo) setNeedCheck() {
     atomic.StoreUint32(&f.needCheck, 1)
 }
 
-func (f *fileCheckInfo) getFinish() bool {
-    return atomic.LoadUint32(&f.finish) == 1
-}
-
-func (f *fileCheckInfo) setFinish() {
-    atomic.StoreUint32(&f.finish, 1)
-}
-
-type flushInfo struct {
-    finish chan bool
-}
-
-// Sender is matcher
+// Sender is sender
 type Sender struct {
    callers string
    fileReader *filereader.FileReader
    config *configurator.Config
    targetInfo *targetInfo
    fileCheckInfo *fileCheckInfo
-   flushInfo *flushInfo
    hostname string
 }
 
 func (s *Sender) fileCheckLoop() {
     for {
-        log.Printf("XXX0")
-        s.fileCheckInfo.kickEvent.Acquire(context.Background(), 1)
-        if s.fileCheckInfo.getFinish() {
-            return
+        select {
+        case _, ok := <-s.fileCheckInfo.eventCh:
+            if !ok {
+               return
+            }
+        case <-time.After(time.Duration(s.config.FlushInterval) * time.Second):
         }
-        log.Printf("XXX1")
-        if !s.fileCheckInfo.getNeedCheck() {
-            return
-        }
-        log.Printf("XXX2")
         fileID := s.targetInfo.getFileID()
         fileName := s.targetInfo.getFileName()
 	trackLinkFile := s.targetInfo.getTrackLinkFile()
@@ -124,17 +106,6 @@ func (s *Sender) fileCheckLoop() {
     }
 }
 
-func (s *Sender) flushLoop() {
-    for {
-        select {
-        case <-time.After(time.Duration(s.config.FlushInterval) * time.Second):
-            s.fileCheckInfo.kickEvent.Release(1)
-        case <-s.flushInfo.finish:
-            return
-        }
-    }
-}
-
 func (s *Sender) initialize(fileName string, fileID string, trackLinkFile string) {
     s.targetInfo = &targetInfo{
         fileNameMutex: new(sync.Mutex),
@@ -143,26 +114,17 @@ func (s *Sender) initialize(fileName string, fileID string, trackLinkFile string
         trackLinkFile: trackLinkFile,
     }
     s.fileCheckInfo = &fileCheckInfo{
-        kickEvent: semaphore.NewWeighted(0),
+        eventCh: make(chan bool),
         needCheck: 0,
-        finish: 0,
-    }
-    s.flushInfo = &flushInfo{
-        finish: make(chan bool),
     }
     go s.fileCheckLoop()
-    if s.config.FlushInterval != 0 {
-         go s.flushLoop()
-    }
 }
 
 func (s *Sender) finalize(fileName string, fileID string, trackLinkFile string) {
     if s.targetInfo == nil {
         return
     }
-    close(s.flushInfo.finish)
-    s.fileCheckInfo.setFinish()
-    s.fileCheckInfo.kickEvent.Release(1)
+    close(s.fileCheckInfo.eventCh)
 }
 
 // FoundFile is add file
@@ -189,9 +151,7 @@ func (s *Sender) RenamedFile(oldFileName string, newFileName string, fileID stri
 func (s *Sender) ModifiedFile(fileName string, fileID string) {
     s.fileCheckInfo.setNeedCheck()
     if s.config.FlushInterval == 0 {
-        log.Printf("YYY1")
-        s.fileCheckInfo.kickEvent.Release(1)
-        log.Printf("YYY2")
+        s.fileCheckInfo.eventCh <- true
     }
 }
 
@@ -220,7 +180,6 @@ func NewSender(callers string, configFile string) (actorplugger.ActorPlugin, err
         config: config,
         targetInfo: nil,
         fileCheckInfo: nil,
-        flushInfo: nil,
         hostname: hostname,
     }, nil
 }

@@ -3,11 +3,9 @@ package main
 import (
     "log"
     "sync"
-    "sync/atomic"
-    "context"
+    "time"
     "path"
     "path/filepath"
-    "golang.org/x/sync/semaphore"
     "github.com/pkg/errors"
     "github.com/potix/log_monitor/actorplugger"
     "github.com/potix/log_monitor/actor_plugins/matcher/configurator"
@@ -43,25 +41,7 @@ func (t *targetInfo) getTrackLinkFilePath() (string) {
 }
 
 type fileCheckInfo struct {
-    kickEvent *semaphore.Weighted
-    needCheck uint32
-    finish  uint32
-}
-
-func (f *fileCheckInfo) getNeedCheck() bool {
-    return atomic.CompareAndSwapUint32(&f.needCheck, 1, 0)
-}
-
-func (f *fileCheckInfo) setNeedCheck() {
-    atomic.StoreUint32(&f.needCheck, 1)
-}
-
-func (f *fileCheckInfo) getFinish() bool {
-    return atomic.LoadUint32(&f.finish) == 1
-}
-
-func (f *fileCheckInfo) setFinish() {
-    atomic.StoreUint32(&f.finish, 1)
+    eventCh chan bool
 }
 
 // Matcher is matcher
@@ -76,12 +56,12 @@ type Matcher struct {
 
 func (m *Matcher) fileCheckLoop() {
     for {
-        m.fileCheckInfo.kickEvent.Acquire(context.Background(), 1)
-        if m.fileCheckInfo.getFinish() {
-            return
-        }
-        if !m.fileCheckInfo.getNeedCheck() {
-            continue
+        select {
+        case _, ok := <-m.fileCheckInfo.eventCh:
+            if !ok {
+               return
+            }
+        case <-time.After(time.Duration(60) * time.Second):
         }
         fileID := m.targetInfo.getFileID()
         fileName := m.targetInfo.getFileName()
@@ -111,9 +91,7 @@ func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath s
         trackLinkFilePath: trackLinkFilePath,
     }
     m.fileCheckInfo = &fileCheckInfo{
-        kickEvent: semaphore.NewWeighted(0),
-        needCheck: 0,
-        finish: 0,
+        eventCh: make(chan bool),
     }
     m.ruleManager.Start()
     go m.fileCheckLoop()
@@ -123,8 +101,7 @@ func (m *Matcher) finalize(fileName string, fileID string, trackLinkFilePath str
     if m.targetInfo == nil {
         return
     }
-    m.fileCheckInfo.setFinish()
-    m.fileCheckInfo.kickEvent.Release(1)
+    close(m.fileCheckInfo.eventCh)
     m.ruleManager.Stop()
 }
 
@@ -150,7 +127,7 @@ func (m *Matcher) RenamedFile(oldFileName string, newFileName string, fileID str
 
 // ModifiedFile is modify file
 func (m *Matcher) ModifiedFile(fileName string, fileID string) {
-    m.fileCheckInfo.kickEvent.Release(1)
+    m.fileCheckInfo.eventCh <- true
 }
 
 // NewMatcher is create new matcher
