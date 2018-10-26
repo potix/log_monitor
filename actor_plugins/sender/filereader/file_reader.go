@@ -4,6 +4,7 @@ import (
     "os"
     "log"
     "bytes"
+    "io"
     "bufio"
     "path/filepath"
     "encoding/gob"
@@ -60,11 +61,11 @@ func (f *FileReader)saveFileInfo(fileID string) (error) {
     return nil
 }
 
-func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, error) {
+func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, error) {
     if f.fileInfo == nil {
         err := f.loadFileInfo(fileID)
         if err != nil {
-            return nil, errors.Wrapf(err, "can not load file info (%v)", fileID)
+            return nil, false, errors.Wrapf(err, "can not load file info (%v)", fileID)
         }
         f.fileInfo = &fileInfo{
             fileID: fileID,
@@ -78,39 +79,45 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, error) {
     }
     fi, err := os.Stat(trackLinkFile)
     if err != nil {
-        return nil, errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
+        return nil, false, errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
     }
     if fi.Size() <= f.fileInfo.pos {
-        return nil, nil
+        return nil, false, nil
     }
 
     file, err := os.Open(trackLinkFile)
     if err != nil {
-        return nil, errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
+        return nil, false, errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
     }
     defer file.Close()
     _, err = file.Seek(f.fileInfo.pos, 0)
     if err != nil {
-        return nil, errors.Wrapf(err, "can not seek trackLinkFile (%v)", trackLinkFile)
+        return nil, false, errors.Wrapf(err, "can not seek trackLinkFile (%v)", trackLinkFile)
     }
-    data := make([]byte, 0, 8192)
+    data := make([]byte, 0, 1048576)
     dataBuffer := bytes.NewBuffer(data)
     reader := bufio.NewReader(file)
+    eof := false
     for {
         line, err := reader.ReadBytes('\n')
         if err != nil {
-            log.Printf("can not read trackLinkFile (%v): %v", trackLinkFile, err)
-            // finish
+            if err == io.EOF {
+                eof = true
+            } else {
+                log.Printf("can not read trackLinkFile (%v): %v", trackLinkFile, err)
+            }
             break
         }
         _, err = dataBuffer.Write(line)
         if err != nil {
             log.Printf("can not read trackLinkFile (%v): %v", trackLinkFile, err)
-            return nil, errors.Wrap(err, "can not write to buffer")
+            return nil, eof, errors.Wrap(err, "can not write to buffer")
         }
-        
+        if dataBuffer.Len() > 1048576 {
+            break
+        }
     }
-    return dataBuffer.Bytes(), nil
+    return dataBuffer.Bytes(), eof, nil
     
 }
 

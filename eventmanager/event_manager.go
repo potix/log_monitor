@@ -65,7 +65,7 @@ log.Printf("actors = %v", parentPathInfo.actors)
         }
         actorPluginDir := filepath.Dir(actorPluginFilePath)
         actorPluginConfigPath := filepath.Join(actorPluginDir, actor.Config)
-        newActorPlugin, err :=  actorPluginNewFunc("log_monitor", actorPluginConfigPath)
+        newActorPlugin, err :=  actorPluginNewFunc(".log_monitor", actorPluginConfigPath)
         if err != nil {
             return nil, errors.Wrapf(err, "can not create plugin (%v)", actor.Name)
         }

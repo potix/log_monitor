@@ -76,7 +76,8 @@ func (s *Sender) fileCheckLoop() {
         fileID := s.targetInfo.getFileID()
         fileName := s.targetInfo.getFileName()
 	trackLinkFile := s.targetInfo.getTrackLinkFile()
-        data, err := s.fileReader.Read(fileID, trackLinkFile)
+again:
+        data, eof, err := s.fileReader.Read(fileID, trackLinkFile)
         if err != nil {
             log.Printf("can not check file (%v, %v): %v", fileID, trackLinkFile, err)
             continue
@@ -103,6 +104,9 @@ func (s *Sender) fileCheckLoop() {
             continue
         }
         s.fileReader.UpdatePosition(len(data))
+        if !eof {
+            goto again
+        }
     }
 }
 
