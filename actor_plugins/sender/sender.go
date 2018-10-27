@@ -86,9 +86,9 @@ func (s *Sender) fileCheckLoop() {
 	client := logpb.NewLogClient(conn)
         defer conn.Close()
 again:
-        data, eof, err := s.fileReader.Read(fileID, trackLinkFile)
+        data, eof, err := s.fileReader.Read(fileID, fileName, trackLinkFile)
         if err != nil {
-            log.Printf("can not check file (%v, %v): %v", fileID, trackLinkFile, err)
+            log.Printf("can not read file (%v, %v, %v): %v", fileID, fileName, trackLinkFile, err)
             continue
         }
 	transferRequest := &logpb.TransferRequest {
@@ -106,7 +106,7 @@ again:
             log.Printf("can not transfer : %v", transferReply.Msg)
             continue
         }
-        s.fileReader.UpdatePosition(len(data))
+        s.fileReader.UpdatePosition(fileID, len(data))
         if !eof {
             goto again
         }

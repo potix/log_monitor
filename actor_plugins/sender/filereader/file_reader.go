@@ -70,21 +70,23 @@ func (f *FileReader)saveFileInfo(fileID string) (error) {
     return nil
 }
 
-func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, error) {
+func (f *FileReader)Read(fileID string, fileName string, trackLinkFile string) ([]byte, bool, error) {
     if f.fileInfo == nil {
         err := f.loadFileInfo(fileID)
         if err != nil {
-            return nil, false, errors.Wrapf(err, "can not load file info (%v)", fileID)
+            return nil, false, errors.Wrapf(err, "can not load file info (%v %v)", fileID, fileName)
         }
-        f.fileInfo = &fileInfo{
-            FileID: fileID,
-            TrackLinkFile: trackLinkFile,
-            Pos: 0,
+        if f.fileInfo == nil {
+            f.fileInfo = &fileInfo{
+                FileID: fileID,
+                TrackLinkFile: trackLinkFile,
+                Pos: 0,
+            }
+	    err = f.saveFileInfo(fileID)
+	    if err != nil {
+	        log.Printf("can not save file info: %v", err)
+	    }
         }
-	err = f.saveFileInfo(fileID)
-	if err != nil {
-	    log.Printf("can not save file info: %v", err)
-	}
     }
     fi, err := os.Stat(trackLinkFile)
     if err != nil {
@@ -131,12 +133,12 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, err
 }
 
 // UpdatePosition is update file position
-func (f *FileReader)UpdatePosition(readLen int) {
-    if f.fileInfo == nil {
+func (f *FileReader)UpdatePosition(fileID string, readLen int) {
+    if f.fileInfo == nil || readLen <= 0  {
         return
     }
     f.fileInfo.Pos += int64(readLen)
-    err := f.saveFileInfo(f.fileInfo.FileID)
+    err := f.saveFileInfo(fileID)
     if err != nil {
         log.Printf("can not save file info: %v", err)
     }

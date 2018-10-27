@@ -42,7 +42,7 @@ func (f * FileChecker)loadFileInfo(fileID string) (error) {
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
-        //os.Remove(infoFilePath)
+        os.Remove(infoFilePath)
         return errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
@@ -97,17 +97,19 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
     if f.fileInfo == nil {
         err := f.loadFileInfo(fileID)
         if err != nil {
-            return errors.Wrapf(err, "can not load file info (%v)", fileID)
+            return errors.Wrapf(err, "can not load file info (%v, %v)", fileName, fileID)
         }
-        f.fileInfo = &fileInfo{
-            FileID: fileID,
-            TrackLinkFile: trackLinkFile,
-            Pos: 0,
+        if f.fileInfo == nil {
+            f.fileInfo = &fileInfo{
+                FileID: fileID,
+                TrackLinkFile: trackLinkFile,
+                Pos: 0,
+            }
+	    err = f.saveFileInfo(fileID)
+	    if err != nil {
+	        log.Printf("can not save file info: %v", err)
+	    }
         }
-	err = f.saveFileInfo(fileID)
-	if err != nil {
-	    log.Printf("can not save file info: %v", err)
-	}
     }
     fi, err := os.Stat(trackLinkFile)
     if err != nil {
@@ -131,7 +133,7 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
         data, err := reader.ReadBytes('\n')
         if err != nil {
             if err != io.EOF {
-                log.Printf("can not read bytes (%v:%v): %v", trackLinkFile, f.fileInfo.Pos, err)
+                log.Printf("can not read bytes (%v, %v, %v): %v", trackLinkFile, fileName, f.fileInfo.Pos, err)
             }
             break
         }

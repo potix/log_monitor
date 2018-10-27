@@ -79,7 +79,6 @@ func (m *Matcher) fileCheckLoop() {
 }
 
 func (m *Matcher) initialize(fileName string, fileID string, trackLinkFilePath string) {
-log.Printf("initialize")
     pathMatchers := m.ruleManager.GetRule(fileName)
     if pathMatchers == nil {
         log.Printf("not found rule for target (%v)", fileName)
