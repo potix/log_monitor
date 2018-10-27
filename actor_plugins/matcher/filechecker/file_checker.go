@@ -42,7 +42,7 @@ func (f * FileChecker)loadFileInfo(fileID string) (error) {
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
-        os.Remove(infoFilePath)
+        //os.Remove(infoFilePath)
         return errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
@@ -141,14 +141,17 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
             if err != nil {
                 log.Printf("can not macth message (%v, %v): %v", matcher.Pattern, string(data), err)
             }
-            if matched {
-                log.Printf("matched (%v %v, %v)", fileName, matcher.Pattern, string(data))
-                if !f.config.SkipNotify && !pathMatcher.SkipNotify {
-                    err := f.callNotify(data, fileID, fileName, pathMatcher)
-                    if err != nil {
-                        log.Printf("can not notify (%v, %v): %v", matcher.Pattern, string(data), err)
-                    }
-                }
+            if !matched {
+                continue
+            }
+            if f.config.SkipNotify || pathMatcher.SkipNotify {
+                continue
+            }
+            err = f.callNotify(data, fileID, fileName, pathMatcher)
+            if err != nil {
+                log.Printf("can not notify (%v, %v): %v", matcher.Pattern, string(data), err)
+            } else {
+                log.Printf("notified (%v)", matcher.Pattern)
             }
         }
         f.fileInfo.Pos += int64(len(data))

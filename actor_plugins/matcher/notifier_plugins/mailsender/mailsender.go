@@ -22,7 +22,6 @@ type MailSender struct {
 
 // Notify is notify
 func (m *MailSender) Notify(msg []byte, fileID string, fileName string, label string) {
-log.Printf("notify")
 	format := defaultSubjectFormat
 	if m.config.SubjectFormat != "" {
 	    format = m.config.SubjectFormat
@@ -31,7 +30,7 @@ log.Printf("notify")
         subject := r.Replace(format)
         err := m.smtpClient.SendMail(subject, string(msg))
         if err != nil {
-            log.Printf("can not send mail (%v, %v, %v, %v): err", m.config.From, m.config.To, m.config.HostPort, subject)
+            log.Printf("can not send mail (%v, %v, %v, %v): %v", m.config.From, m.config.To, m.config.HostPort, subject, err)
         }
 }
 

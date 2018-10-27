@@ -7,10 +7,10 @@ skip_notify=false
   pattern="^.*(messages|syslog)$"
   skip_notify=false
   label="matcher2"
-  [[ path_matchers.notifires ]]
+  [[ path_matchers.notifiers ]]
     name="mailsender"
     config="mailsender.toml"
   [[ path_matchers.msg_matchers ]]
-    pattern="^.*[eE][rR][rR].*$"
+    pattern="(?i)^.*errdayo.*$"
   [[ path_matchers.msg_matchers ]]
-    pattern="^.*[wW][aA][rR][nN].*$"
+    pattern="(?i)^.*warndayo.*$"
