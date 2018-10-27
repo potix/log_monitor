@@ -14,9 +14,9 @@ import (
 )
 
 type fileInfo struct {
-    fileID string
-    trackLinkFile string
-    pos int64
+    FileID string
+    TrackLinkFile string
+    Pos int64
 }
 
 // FileChecker is FileChecker
@@ -27,37 +27,45 @@ type FileChecker struct {
 }
 
 func (f * FileChecker)loadFileInfo(fileID string) (error) {
-    infoFilePath := filepath.Join(f.callers, fileID)
+    infoFilePath := filepath.Join(f.config.SavePrefix, f.callers, fileID)
     _, err := os.Stat(infoFilePath)
     if err != nil {
         return nil
     }
     file, err := os.Open(infoFilePath)
     if err != nil {
-        errors.Wrapf(err, "can not read file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not read file info (%v)", infoFilePath)
     }
     defer file.Close()
     enc := gob.NewDecoder(file)
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
-        errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
     return nil
 }
 
 func (f *FileChecker)saveFileInfo(fileID string) (error) {
-    infoFilePath := filepath.Join(f.callers, fileID)
+    infoFileDir := filepath.Join(f.config.SavePrefix, f.callers)
+    _, err := os.Stat(infoFileDir)
+    if err != nil {
+       err := os.MkdirAll(infoFileDir, 0755)
+       if err != nil {
+           return errors.Wrapf(err, "can not create directory (%v)", infoFileDir)
+       }
+    }
+    infoFilePath := filepath.Join(infoFileDir, fileID)
     file, err := os.Create(infoFilePath)
     if err != nil {
-        errors.Wrapf(err, "can not create file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not create file info (%v)", infoFilePath)
     }
     defer file.Close()
     enc := gob.NewEncoder(file)
     err = enc.Encode(f.fileInfo)
     if err != nil {
-        errors.Wrapf(err, "can not encode file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not encode file info (%v)", infoFilePath)
     }
     return nil
 }
@@ -90,9 +98,9 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
             return errors.Wrapf(err, "can not load file info (%v)", fileID)
         }
         f.fileInfo = &fileInfo{
-            fileID: fileID,
-            trackLinkFile: trackLinkFile,
-            pos: 0,
+            FileID: fileID,
+            TrackLinkFile: trackLinkFile,
+            Pos: 0,
         }
 	err = f.saveFileInfo(fileID)
 	if err != nil {
@@ -103,16 +111,16 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
     if err != nil {
         return errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
     }
-    if fi.Size() <= f.fileInfo.pos {
+    if fi.Size() <= f.fileInfo.Pos {
         return nil
     }
-    oldPos := f.fileInfo.pos
+    oldPos := f.fileInfo.Pos
     file, err := os.Open(trackLinkFile)
     if err != nil {
         return errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
     }
     defer file.Close()
-    _, err = file.Seek(f.fileInfo.pos, 0)
+    _, err = file.Seek(f.fileInfo.Pos, 0)
     if err != nil {
         return errors.Wrapf(err, "can not seek trackLinkFile (%v)", trackLinkFile)
     }
@@ -120,7 +128,7 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
     for {
         data, err := reader.ReadBytes('\n')
         if err != nil {
-            log.Printf("can not read bytes (%v:%v)", trackLinkFile, f.fileInfo.pos)
+            log.Printf("can not read bytes (%v:%v)", trackLinkFile, f.fileInfo.Pos)
             // finish
             break
         }
@@ -129,6 +137,7 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
             if err != nil {
                 log.Printf("can not macth message (%v, %v): %v", matcher.Pattern, string(data), err)
             }
+log.Printf("match result = %v", matched)
             if matched {
                 log.Printf("matched (%v %v, %v)", fileName, matcher.Pattern, string(data))
                 if !f.config.SkipNotify && !pathMatcher.SkipNotify {
@@ -139,12 +148,12 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
                 }
             }
         }
-        f.fileInfo.pos += int64(len(data))
+        f.fileInfo.Pos += int64(len(data))
     }
-    if oldPos == f.fileInfo.pos {
+    if oldPos == f.fileInfo.Pos {
         return nil
     }
-    err = f.saveFileInfo(f.fileInfo.fileID)
+    err = f.saveFileInfo(f.fileInfo.FileID)
     if err != nil {
         log.Printf("can not save file info: %v", err)
     }

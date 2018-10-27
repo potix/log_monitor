@@ -1,11 +1,12 @@
+save_prefix="m2"
 auto_reload = 5
 notifier_plugin_path = "notifier_plugins"
 skip_notify=false
 
 [[ path_matchers ]]
-  pattern="^.+(messages|syslog).+$"
+  pattern="^.*(messages|syslog)$"
   skip_notify=false
-  label="matcher 2"
+  label="matcher2"
   [[ path_matchers.notifires ]]
     name="mailsender"
     config="mailsender.toml"

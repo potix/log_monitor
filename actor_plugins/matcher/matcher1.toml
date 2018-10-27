@@ -1,9 +1,10 @@
+save_prefix="m1"
 auto_reload = 5
 notifier_plugin_path = "notifier_plugins"
 skip_notify=false
 
 [[ path_matchers ]]
-  pattern="^.+(messages|syslog).+$"
+  pattern="^.*(messages|syslog)$"
   skip_notify=false
   label="matcher 1"
   [[ path_matchers.notifires ]]

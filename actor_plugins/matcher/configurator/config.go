@@ -22,6 +22,7 @@ type PathMatcher struct {
 
 // Config is Config
 type Config struct {
+    SavePrefix string `json:"save_prefix" yaml:"save_prefix" toml:"save_prefix"`
     AutoReload int64 `json:"auto_reload" yaml:"auto_reload" toml:"auto_reload"`
     NotifierPluginPath string  `json:"notifier_plugin_path" yaml:"notifier_plugin_path" toml:"notifier_plugin_path"`
     SkipNotify bool `json:"skip_notify" yaml:"skip_notify" toml:"skip_notify"`

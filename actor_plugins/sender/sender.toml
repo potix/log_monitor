@@ -1,3 +1,4 @@
+save_prefix = "s"
 addr_port = "127.0.0.1:50000"
 label = "default"
 flush_interval = 1

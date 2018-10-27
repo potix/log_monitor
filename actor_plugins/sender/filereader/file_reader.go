@@ -13,9 +13,9 @@ import (
 )
 
 type fileInfo struct {
-    fileID string
-    trackLinkFile string
-    pos int64
+    FileID string
+    TrackLinkFile string
+    Pos int64
 }
 
 // FileReader is FileReader
@@ -26,37 +26,45 @@ type FileReader struct {
 }
 
 func (f * FileReader)loadFileInfo(fileID string) (error) {
-    infoFilePath := filepath.Join(f.callers, fileID)
+    infoFilePath := filepath.Join(f.config.SavePrefix, f.callers, fileID)
     _, err := os.Stat(infoFilePath)
     if err != nil {
         return nil
     }
     file, err := os.Open(infoFilePath)
     if err != nil {
-        errors.Wrapf(err, "can not read file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not read file info (%v)", infoFilePath)
     }
     defer file.Close()
     enc := gob.NewDecoder(file)
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
-        errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
     return nil
 }
 
 func (f *FileReader)saveFileInfo(fileID string) (error) {
-    infoFilePath := filepath.Join(f.callers, fileID)
+    infoFileDir := filepath.Join(f.config.SavePrefix, f.callers)
+    _, err := os.Stat(infoFileDir)
+    if err != nil {
+       err := os.MkdirAll(infoFileDir, 0755)
+       if err != nil {
+           return errors.Wrapf(err, "can not create directory (%v)", infoFileDir)
+       }
+    }
+    infoFilePath := filepath.Join(infoFileDir, fileID)
     file, err := os.Create(infoFilePath)
     if err != nil {
-        errors.Wrapf(err, "can not create file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not create file info (%v)", infoFilePath)
     }
     defer file.Close()
     enc := gob.NewEncoder(file)
     err = enc.Encode(f.fileInfo)
     if err != nil {
-        errors.Wrapf(err, "can not encode file info (%v)", infoFilePath)
+        return errors.Wrapf(err, "can not encode file info (%v)", infoFilePath)
     }
     return nil
 }
@@ -68,9 +76,9 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, err
             return nil, false, errors.Wrapf(err, "can not load file info (%v)", fileID)
         }
         f.fileInfo = &fileInfo{
-            fileID: fileID,
-            trackLinkFile: trackLinkFile,
-            pos: 0,
+            FileID: fileID,
+            TrackLinkFile: trackLinkFile,
+            Pos: 0,
         }
 	err = f.saveFileInfo(fileID)
 	if err != nil {
@@ -81,7 +89,7 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, err
     if err != nil {
         return nil, false, errors.Wrapf(err, "not found trackLinkFile (%v)", trackLinkFile)
     }
-    if fi.Size() <= f.fileInfo.pos {
+    if fi.Size() <= f.fileInfo.Pos {
         return nil, false, nil
     }
 
@@ -90,7 +98,7 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, err
         return nil, false, errors.Wrapf(err, "can not open trackLinkFile (%v)", trackLinkFile)
     }
     defer file.Close()
-    _, err = file.Seek(f.fileInfo.pos, 0)
+    _, err = file.Seek(f.fileInfo.Pos, 0)
     if err != nil {
         return nil, false, errors.Wrapf(err, "can not seek trackLinkFile (%v)", trackLinkFile)
     }
@@ -126,8 +134,8 @@ func (f *FileReader)UpdatePosition(readLen int) {
     if f.fileInfo == nil {
         return
     }
-    f.fileInfo.pos += int64(readLen)
-    err := f.saveFileInfo(f.fileInfo.fileID)
+    f.fileInfo.Pos += int64(readLen)
+    err := f.saveFileInfo(f.fileInfo.FileID)
     if err != nil {
         log.Printf("can not save file info: %v", err)
     }
