@@ -3,6 +3,7 @@ package filechecker
 import (
     "os"
     "log"
+    "io"
     "regexp"
     "bufio"
     "path"
@@ -41,6 +42,7 @@ func (f * FileChecker)loadFileInfo(fileID string) (error) {
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
+        os.Remove(infoFilePath)
         return errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
@@ -128,16 +130,17 @@ func (f *FileChecker)Check(fileID string, trackLinkFile string, fileName string,
     for {
         data, err := reader.ReadBytes('\n')
         if err != nil {
-            log.Printf("can not read bytes (%v:%v)", trackLinkFile, f.fileInfo.Pos)
-            // finish
+            if err != io.EOF {
+                log.Printf("can not read bytes (%v:%v): %v", trackLinkFile, f.fileInfo.Pos, err)
+            }
             break
         }
+        trimData := data[:len(data) -1]
         for _, matcher := range pathMatcher.MsgMatchers {
-            matched, err := regexp.Match(matcher.Pattern, data)
+            matched, err := regexp.Match(matcher.Pattern, trimData)
             if err != nil {
                 log.Printf("can not macth message (%v, %v): %v", matcher.Pattern, string(data), err)
             }
-log.Printf("match result = %v", matched)
             if matched {
                 log.Printf("matched (%v %v, %v)", fileName, matcher.Pattern, string(data))
                 if !f.config.SkipNotify && !pathMatcher.SkipNotify {

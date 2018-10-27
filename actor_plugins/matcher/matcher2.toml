@@ -11,6 +11,6 @@ skip_notify=false
     name="mailsender"
     config="mailsender.toml"
   [[ path_matchers.msg_matchers ]]
-    pattern="^.+[eE][rR][rR].+$"
+    pattern="^.*[eE][rR][rR].*$"
   [[ path_matchers.msg_matchers ]]
-    pattern="^.+[wW][aA][rR][nN].+$"
+    pattern="^.*[wW][aA][rR][nN].*$"

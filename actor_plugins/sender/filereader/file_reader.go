@@ -40,6 +40,7 @@ func (f * FileReader)loadFileInfo(fileID string) (error) {
     newFileInfo := new(fileInfo)
     err = enc.Decode(newFileInfo)
     if err != nil {
+        os.Remove(infoFilePath)
         return errors.Wrapf(err, "can not decode file info (%v)", infoFilePath)
     }
     f.fileInfo = newFileInfo
@@ -112,7 +113,7 @@ func (f *FileReader)Read(fileID string, trackLinkFile string) ([]byte, bool, err
             if err == io.EOF {
                 eof = true
             } else {
-                log.Printf("can not read trackLinkFile (%v): %v", trackLinkFile, err)
+                log.Printf("can not read bytes (%v, %v): %v", trackLinkFile, f.fileInfo.Pos,  err)
             }
             break
         }

@@ -22,6 +22,7 @@ type MailSender struct {
 
 // Notify is notify
 func (m *MailSender) Notify(msg []byte, fileID string, fileName string, label string) {
+log.Printf("notify")
 	format := defaultSubjectFormat
 	if m.config.SubjectFormat != "" {
 	    format = m.config.SubjectFormat
