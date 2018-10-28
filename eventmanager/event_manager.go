@@ -6,6 +6,7 @@ import (
     "fmt"
     "log"
     "sync"
+    "time"
     "os/user"
     "regexp"
     "io/ioutil"
@@ -40,6 +41,7 @@ type renameInfo struct {
 
 // EventManager is event manager
 type EventManager struct{
+    config *configurator.LogMonitorConfig
     loopEnd  chan bool
     watcher *fsnotify.Watcher
     paths map[string]*pathInfo
@@ -275,10 +277,23 @@ func (e *EventManager) modifiedFile(event fsnotify.Event) {
     status.dirty = false
 }
 
+func (e *EventManager) DirCheckLoop() {
+    for {
+        select {
+	case <-e.loopEnd:
+                return
+        case <-time.After(time.Duration(5) * time.Second):
+            for _, targetInfo := range e.config.Targets {
+                e.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors, true)
+            }
+        }
+    }
+}
+
 func (e *EventManager) eventLoop() {
     for {
         select {
-		case <- e.loopEnd:
+	case <- e.loopEnd:
             return
         case event, ok := <-e.watcher.Events:
             if !ok {
@@ -435,6 +450,7 @@ func (e *EventManager) getPathInfo(path string) (*pathInfo, bool) {
 // Start is start
 func (e *EventManager) Start() (error) {
      e.loopEnd = make(chan bool)
+     go e.DirCheckLoop()
      go e.eventLoop()
      return nil
 }
@@ -471,7 +487,7 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
     return re.ReplaceAllString(targetPath, u.HomeDir+"/")
 }
 
-func (e *EventManager) addTargets(targetPath string, pattern string, actors []*configurator.Actor) {
+func (e *EventManager) addTargets(targetPath string, pattern string, actors []*configurator.Actor, dirOnly bool) {
     if path.Base(targetPath) == trackLinkPathName {
         // skip track link path
         return
@@ -493,8 +509,11 @@ func (e *EventManager) addTargets(targetPath string, pattern string, actors []*c
             newPath = "." + "/" + newPath
         }
         if file.IsDir() {
-            e.addTargets(newPath, pattern, actors)
+            e.addTargets(newPath, pattern, actors, dirOnly)
 	    continue
+        }
+        if dirOnly {
+            continue
         }
         matched, err := regexp.MatchString(pattern, newPath)
         if err != nil {    
@@ -528,6 +547,7 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
         return nil, errors.Wrapf(err, "can not create event manager")
     }
     eventManager := &EventManager {
+        config : config,
         loopEnd: make(chan bool),
         watcher : watcher,
         paths : make(map[string]*pathInfo),
@@ -538,7 +558,7 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
         renameFilesMutex : new(sync.Mutex),
     }
     for _, targetInfo := range config.Targets {
-         eventManager.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors)
+         eventManager.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors, false)
     }
     return eventManager, nil
 }
