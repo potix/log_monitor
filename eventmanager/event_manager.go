@@ -94,16 +94,18 @@ func (e *EventManager) foundFile(name string, fileID string) (error) {
             return errors.Wrapf(err, "[foundFile] can not create track link file (%v)", trackLinkFilePath)
         }
     }
-    // create plugin
-    actorPlugins, err := e.newActorPlugins(name)
-    if err != nil {
-	return errors.Wrapf(err, "[foundFile] can not create actor plugin (%v, %v)", fileID, name)
-    }
+    // check files
     e.filesMutex.Lock()
     defer e.filesMutex.Unlock()
     _, ok := e.files[name]
     if ok {
-        return errors.Errorf("[foundFile] already exists file (%v, %v)", name, fileID)
+        //log.Printf("[foundFile] already exists file (%v, %v)", name, fileID)
+        return nil
+    }
+    // create plugin
+    actorPlugins, err := e.newActorPlugins(name)
+    if err != nil {
+	return errors.Wrapf(err, "[foundFile] can not create actor plugin (%v, %v)", fileID, name)
     }
     e.files[name] = &fileStatus {
         fileID: fileID,
@@ -284,7 +286,7 @@ func (e *EventManager) DirCheckLoop() {
                 return
         case <-time.After(time.Duration(5) * time.Second):
             for _, targetInfo := range e.config.Targets {
-                e.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors, true)
+                e.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors)
             }
         }
     }
@@ -325,7 +327,7 @@ func (e *EventManager) eventLoop() {
                } else {
                    matched, err := regexp.MatchString(pathInfo.pattern, event.Name)
                    if err != nil {
-                       log.Printf("[addTargets] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
+                       log.Printf("[eventLoop] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
                        break
                    }
                    if !matched {
@@ -359,7 +361,7 @@ func (e *EventManager) eventLoop() {
                }
                matched, err := regexp.MatchString(pathInfo.pattern, event.Name)
                if err != nil {
-                   log.Printf("[addTargets] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
+                   log.Printf("[eventLoop] can not target file matching (%v, %v)", pathInfo.pattern, event.Name)
                    break
                }
                if !matched {
@@ -369,7 +371,7 @@ func (e *EventManager) eventLoop() {
             }
             if event.Op&fsnotify.Remove != fsnotify.Remove && event.Op&fsnotify.Rename != fsnotify.Rename {
                if getFileInfoErr != nil {
-                   log.Printf("[event.Loop] can not get file info (%v)", event.Name)
+                   log.Printf("[eventLoop] can not get file info (%v)", event.Name)
                    break
                }
                if info.IsDir() {
@@ -408,7 +410,7 @@ func (e *EventManager) addPath(path string, pattern string, actors []*configurat
         defer e.pathsMutex.Unlock()
         _, ok := e.paths[path]
         if ok {
-            log.Printf("[addPath] already exists path (%v)", path)
+            //log.Printf("[addPath] already exists path (%v)", path)
             return nil
         }
         err = e.watcher.Add(path)
@@ -487,7 +489,7 @@ func (e *EventManager) fixupPath(targetPath string) (string) {
     return re.ReplaceAllString(targetPath, u.HomeDir+"/")
 }
 
-func (e *EventManager) addTargets(targetPath string, pattern string, actors []*configurator.Actor, dirOnly bool) {
+func (e *EventManager) addTargets(targetPath string, pattern string, actors []*configurator.Actor) {
     if path.Base(targetPath) == trackLinkPathName {
         // skip track link path
         return
@@ -509,11 +511,8 @@ func (e *EventManager) addTargets(targetPath string, pattern string, actors []*c
             newPath = "." + "/" + newPath
         }
         if file.IsDir() {
-            e.addTargets(newPath, pattern, actors, dirOnly)
+            e.addTargets(newPath, pattern, actors)
 	    continue
-        }
-        if dirOnly {
-            continue
         }
         matched, err := regexp.MatchString(pattern, newPath)
         if err != nil {    
@@ -558,7 +557,7 @@ func NewEventManager(configurator *configurator.Configurator) (*EventManager, er
         renameFilesMutex : new(sync.Mutex),
     }
     for _, targetInfo := range config.Targets {
-         eventManager.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors, false)
+         eventManager.addTargets(targetInfo.Path, targetInfo.Pattern, targetInfo.Actors)
     }
     return eventManager, nil
 }
