@@ -78,13 +78,6 @@ func (s *Sender) fileCheckLoop() {
         fileID := s.targetInfo.getFileID()
         fileName := s.targetInfo.getFileName()
 	trackLinkFile := s.targetInfo.getTrackLinkFile()
-	conn, err := grpc.Dial(s.config.AddrPort,  grpc.WithInsecure())
-	if err != nil {
-            log.Printf("can not dial: %v", err)
-            continue
-	}
-	client := logpb.NewLogClient(conn)
-        defer conn.Close()
 again:
         data, eof, err := s.fileReader.Read(fileID, fileName, trackLinkFile)
         if err != nil {
@@ -94,6 +87,12 @@ again:
         if len(data) == 0 {
             continue
         }
+	conn, err := grpc.Dial(s.config.AddrPort,  grpc.WithInsecure())
+	if err != nil {
+            log.Printf("can not dial: %v", err)
+            continue
+	}
+	client := logpb.NewLogClient(conn)
 	transferRequest := &logpb.TransferRequest {
 		Label: s.config.Label,
 		Host: s.hostname,
@@ -101,6 +100,7 @@ again:
 		LogData: data,
 	}
 	transferReply, err := client.Transfer(context.Background(), transferRequest)
+        conn.Close()
 	if err != nil {
             log.Printf("can not recieve reply : %v", err)
             continue
