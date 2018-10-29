@@ -91,6 +91,9 @@ again:
             log.Printf("can not read file (%v, %v, %v): %v", fileID, fileName, trackLinkFile, err)
             continue
         }
+        if len(data) == 0 {
+            continue
+        }
 	transferRequest := &logpb.TransferRequest {
 		Label: s.config.Label,
 		Host: s.hostname,
